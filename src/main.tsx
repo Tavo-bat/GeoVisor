@@ -38,14 +38,37 @@ let searchQuery = '';
 let isSimulated = false;
 let isFetching = false;
 
+const PRIORITY_CITIES = new Set(['medellin', 'bello', 'envigado', 'caldas', 'rionegro', 'laceja', 'guarne', 'barbosa']);
+const DENSE_CITIES = new Set(['itagui', 'laestrella', 'sabaneta', 'marinilla', 'copacabana']);
+
+function getLabelClasses(cityId: string): string {
+  const classes = ['marker-label-tag'];
+  if (PRIORITY_CITIES.has(cityId)) classes.push('priority-label');
+  if (DENSE_CITIES.has(cityId)) classes.push('dense-label');
+  return classes.join(' ');
+}
+
+function syncMapZoomClass() {
+  if (!map) return;
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return;
+  const z = map.getZoom();
+  mapEl.classList.toggle('map-zoom-low', z <= 10);
+  mapEl.classList.toggle('map-zoom-mid', z === 11);
+}
+
 // --- Inicialización del Mapa ---
 function initMap() {
+  const isMobile = window.innerWidth <= 768;
   map = L.map('map', {
-    center: [6.18, -75.45],
+    center: isMobile ? [6.20, -75.48] : [6.18, -75.45],
     zoom: 11,
     zoomControl: false,
     attributionControl: false
   });
+
+  map.on('zoomend', syncMapZoomClass);
+  syncMapZoomClass();
 
   L.control.zoom({ position: 'topleft' }).addTo(map);
 
@@ -163,11 +186,12 @@ function createMunicipalityMarkers() {
   MUNICIPALITIES.forEach(city => {
     const isAburra = city.region === 'aburra';
     const color = isAburra ? '#0284c7' : '#0d9488';
+    const labelClass = getLabelClasses(city.id);
 
     const iconHtml = `
       <div style="position: relative; cursor: pointer;">
         <div style="width: 12px; height: 12px; background: ${color}; border: 2px solid #ffffff; border-radius: 50%; box-shadow: 0 0 10px ${color};"></div>
-        <div class="marker-label-tag">${city.name}</div>
+        <div class="${labelClass}">${city.name}</div>
       </div>
     `;
 
@@ -202,11 +226,12 @@ function updateMarkerIcons() {
 
     const baseColor = isRaining ? cat.color : isAburra ? '#0284c7' : '#0d9488';
     const glow = isRaining ? `0 0 14px ${cat.color}, 0 0 4px #ffffff` : `0 0 8px ${baseColor}`;
+    const labelClass = getLabelClasses(city.id);
 
     const iconHtml = `
       <div style="position: relative; cursor: pointer;">
         <div style="width: 12px; height: 12px; background: ${baseColor}; border: 2px solid #ffffff; border-radius: 50%; box-shadow: ${glow}; transition: all 0.3s ease;"></div>
-        <div class="marker-label-tag">${city.name}</div>
+        <div class="${labelClass}">${city.name}</div>
       </div>
     `;
 

@@ -42,6 +42,7 @@ html, body {
   flex-direction: column;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   position: relative;
 }
@@ -145,6 +146,7 @@ header.gis-header {
   overflow: hidden;
   width: 100%;
   height: calc(100vh - 52px);
+  height: calc(100dvh - 52px);
 }
 
 #map-viewport {
@@ -395,49 +397,50 @@ aside.gis-sidebar.collapsed {
 /* Elongated Horizontal Radar Legend (Bottom Docked) */
 .radar-legend-box {
   position: absolute;
-  bottom: 12px;
+  bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(11, 19, 32, 0.93);
+  background: rgba(11, 19, 32, 0.94);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: 10px;
+  padding: 9px 18px;
   z-index: 920;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
   font-size: 10.5px;
-  width: min(560px, calc(100% - 24px));
+  width: min(690px, calc(100% - 28px));
   user-select: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .legend-top-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  line-height: 1.2;
+  gap: 16px;
+  line-height: 1.25;
 }
 
 .legend-title-wrap {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .legend-title {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.01em;
 }
 
 .legend-sub {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--accent-sky);
   font-family: var(--font-mono);
@@ -446,17 +449,20 @@ aside.gis-sidebar.collapsed {
 .legend-categories-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 9.5px;
+  justify-content: flex-end;
+  gap: 14px;
+  font-size: 10px;
   color: #cbd5e1;
 }
 
 .legend-cat-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 9.5px;
-  color: #94a3b8;
+  gap: 5px;
+  font-size: 10px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .legend-cat-dot {
@@ -464,6 +470,7 @@ aside.gis-sidebar.collapsed {
   height: 7px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .siata-gradient-bar-h {
@@ -663,7 +670,7 @@ input:checked + .switch-slider:before {
 
 .marker-label-tag {
   position: absolute;
-  top: 16px;
+  top: 15px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(15, 23, 42, 0.94);
@@ -677,6 +684,34 @@ input:checked + .switch-slider:before {
   pointer-events: none;
   box-shadow: 0 4px 10px rgba(0,0,0,0.6);
   font-family: var(--font-sans);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* En niveles de zoom lejanos (<= 10) ocultar etiquetas secundarias para evitar solapamiento */
+.map-zoom-low .marker-label-tag:not(.priority-label) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* En móviles con zoom intermedio (<= 11), ocultar etiquetas muy pegadas (Itagüí, La Estrella, Sabaneta, Marinilla) hasta acercar */
+@media (max-width: 768px) {
+  .map-zoom-mid .marker-label-tag.dense-label {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.leaflet-control-attribution {
+  background: rgba(9, 13, 22, 0.65) !important;
+  color: rgba(148, 163, 184, 0.65) !important;
+  font-size: 9px !important;
+  padding: 1px 6px !important;
+  border-radius: 4px 0 0 0 !important;
+  backdrop-filter: blur(4px);
+}
+
+.leaflet-control-attribution a {
+  color: rgba(56, 189, 248, 0.75) !important;
 }
 
 .leaflet-popup-content-wrapper {
@@ -889,36 +924,84 @@ input:checked + .switch-slider:before {
     width: 100%;
     max-width: 100%;
   }
+
+  /* En pantallas móviles ocultamos la atribución inferior para que no se monte debajo de la barra de radar */
+  .leaflet-control-attribution {
+    display: none !important;
+  }
 }
 
 @media (max-width: 600px) {
   header.gis-header {
     padding: 0 10px;
+    height: 48px;
+  }
+  #workspace {
+    height: calc(100vh - 48px);
+    height: calc(100dvh - 48px);
+  }
+  .mobile-menu-drawer {
+    top: 48px;
   }
   .brand-sub {
     display: none;
   }
+  /* Barra de herramientas superior izquierda compacta en horizontal para no tapar el mapa */
   .quick-tools-box {
     top: 10px;
     left: 10px;
+    flex-direction: row;
+    padding: 4px;
+    gap: 4px;
+  }
+  .quick-tools-box .gis-btn {
+    padding: 5px 9px;
+    font-size: 11px;
   }
   .layer-control-wrapper {
     top: 10px;
     right: 10px;
   }
+  .layer-trigger-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
   .leaflet-top.leaflet-left .leaflet-control-zoom {
-    margin-top: 96px !important;
+    margin-top: 52px !important;
     margin-left: 10px !important;
   }
+  .marker-label-tag {
+    font-size: 9.5px;
+    padding: 1px 4px;
+  }
+  /* Leyenda de radar en móvil con todas las categorías compactas en una fila limpia */
   .radar-legend-box {
-    bottom: 8px;
+    bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
     width: calc(100% - 16px);
-    padding: 5px 8px;
+    padding: 7px 10px;
+    gap: 5px;
   }
-  .legend-cat-badge:not(.essential) {
-    display: none;
+  .legend-top-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .legend-title-wrap {
+    justify-content: space-between;
+  }
+  .legend-categories-row {
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .legend-cat-badge {
+    font-size: 8.5px;
+    gap: 3px;
+  }
+  .legend-cat-dot {
+    width: 6px;
+    height: 6px;
   }
   .siata-ticks-h {
     font-size: 8.5px;
