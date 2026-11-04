@@ -1,0 +1,2429 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoVisor Antioquia</title>
+  <meta name="description" content="Visualizador meteorológico interactivo de Antioquia con monitoreo de 18 municipios del Valle de Aburrá y el Oriente Antioqueño." />
+  <meta property="og:title" content="GeoVisor Antioquia" />
+  <meta property="og:description" content="Monitoreo de lluvia en tiempo real con efecto radar de nubes para Valle de Aburrá y Oriente Antioqueño." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <style>
+    /* Reset & Base Variables */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-canvas: #090d16;
+      --bg-panel: rgba(15, 23, 42, 0.94);
+      --bg-panel-solid: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --bg-card-hover: rgba(51, 65, 85, 0.85);
+      --border-subtle: rgba(148, 163, 184, 0.15);
+      --border-accent: rgba(56, 189, 248, 0.35);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-cyan: #06b6d4;
+      --accent-sky: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Header Ribbon */
+    header.gis-header {
+      height: 52px;
+      background: var(--bg-panel-solid);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 1000;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      white-space: nowrap;
+    }
+
+    .brand-reload-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(2, 132, 199, 0.45));
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.3);
+      padding: 0;
+      color: #38bdf8;
+    }
+
+    .brand-reload-btn:hover {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.45), rgba(2, 132, 199, 0.65));
+      border-color: rgba(56, 189, 248, 0.8);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.6);
+      transform: scale(1.05);
+    }
+
+    .brand-reload-btn:active svg {
+      transform: rotate(180deg);
+      transition: transform 0.35s ease;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gis-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(30, 41, 59, 0.7);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    .gis-btn:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(148, 163, 184, 0.3);
+      color: #fff;
+    }
+
+    .gis-btn.active {
+      background: rgba(14, 165, 233, 0.2);
+      border-color: var(--accent-sky);
+      color: var(--accent-sky);
+    }
+
+    /* Main Workspace */
+    #workspace {
+      display: flex;
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      height: calc(100vh - 52px);
+    }
+
+    #map-viewport {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background: #060911;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: #070a13;
+    }
+
+    /* Sidebar Panel (Right) */
+    aside.gis-sidebar {
+      width: 390px;
+      max-width: 100%;
+      height: 100%;
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      z-index: 999;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    aside.gis-sidebar.collapsed {
+      transform: translateX(100%);
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+    }
+
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(15, 23, 42, 0.95);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .sidebar-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-sky);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Summary Banner */
+    .rain-summary-card {
+      background: rgba(14, 165, 233, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .summary-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .honesty-notice {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 10.5px;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .honesty-notice a {
+      color: var(--accent-sky);
+      text-decoration: underline;
+      display: inline-block;
+      margin-top: 3px;
+      font-weight: 600;
+    }
+
+    /* Region Filter Buttons in Sidebar */
+    .region-filter-bar {
+      display: flex;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .filter-tab {
+      flex: 1;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .filter-tab:hover {
+      color: #fff;
+    }
+
+    .filter-tab.active {
+      background: #0284c7;
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    /* Municipalities List in Sidebar */
+    .cities-list-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .city-card-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 7px;
+      padding: 9px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .city-card-item:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(56, 189, 248, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .city-card-item.active-focus {
+      border-color: var(--accent-sky);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+
+    .city-main-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .city-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .city-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .city-region-tag {
+      font-size: 9.5px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    .city-weather-row {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+    }
+
+    .rain-badge-pill {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--text-dim);
+      border: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    .rain-badge-pill.raining {
+      background: rgba(14, 165, 233, 0.2);
+      color: var(--accent-sky);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .rain-badge-pill.heavy {
+      background: rgba(244, 63, 94, 0.2);
+      color: #fb7185;
+      border-color: rgba(244, 63, 94, 0.4);
+    }
+
+    /* Elongated Horizontal Radar Legend (Bottom Docked) */
+    .radar-legend-box {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(11, 19, 32, 0.93);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 8px;
+      padding: 6px 14px;
+      z-index: 920;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+      font-size: 10.5px;
+      width: min(560px, calc(100% - 24px));
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .legend-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      line-height: 1.2;
+    }
+
+    .legend-title-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .legend-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
+
+    .legend-sub {
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--accent-sky);
+      font-family: var(--font-mono);
+    }
+
+    .legend-categories-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9.5px;
+      color: #cbd5e1;
+    }
+
+    .legend-cat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 9.5px;
+      color: #94a3b8;
+    }
+
+    .legend-cat-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .siata-gradient-bar-h {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: linear-gradient(to right,
+        rgba(100, 116, 139, 0.2) 0%,   /* 0 dBZ (Seco / Sin eco) */
+        rgba(100, 116, 139, 0.2) 10%,  /* 8 dBZ (Sin eco) */
+        #0284c7 12.5%,                 /* 10 dBZ (Azul - Bajas) */
+        #10b981 25%,                   /* 20 dBZ (Verde - Ligeras) */
+        #eab308 37.5%,                 /* 30 dBZ (Amarillo - Mod) */
+        #ea580c 50%,                   /* 40 dBZ (Naranja - Altas) */
+        #dc2626 62.5%,                 /* 50 dBZ (Rojo - Muy altas) */
+        #9333ea 75%,                   /* 60 dBZ (Morado - Tormenta) */
+        #d946ef 87.5%,                 /* 70 dBZ (Magenta) */
+        #f472b6 100%                   /* 80 dBZ (Rosa/Granizo) */
+      );
+    }
+
+    .siata-ticks-h {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 600;
+      color: #94a3b8;
+      line-height: 1;
+      padding: 0 1px;
+    }
+
+    /* Floating Quick Map Tools (Top Left) */
+    .quick-tools-box {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      padding: 8px;
+      z-index: 980;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Floating Layer Controls (Top Right) - Collapsible Dropdown */
+    .layer-control-wrapper {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 980;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .layer-trigger-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: rgba(15, 23, 42, 0.94);
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .layer-trigger-btn:hover,
+    .layer-trigger-btn.active {
+      background: rgba(30, 41, 59, 1);
+      border-color: var(--accent-sky);
+      color: var(--accent-sky);
+    }
+
+    .layer-chevron {
+      font-size: 10px;
+      transition: transform 0.2s ease;
+      display: inline-block;
+    }
+
+    .layer-trigger-btn.active .layer-chevron {
+      transform: rotate(180deg);
+    }
+
+    .floating-layer-panel {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 6px;
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      z-index: 980;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 230px;
+      transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+      opacity: 1;
+      transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .floating-layer-panel.collapsed {
+      opacity: 0;
+      transform: translateY(-8px);
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .layer-heading {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-sky);
+      margin-bottom: 2px;
+    }
+
+    .layer-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .custom-switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .custom-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: 0.2s;
+      border-radius: 18px;
+    }
+
+    .switch-slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: 0.2s;
+      border-radius: 50%;
+    }
+
+    input:checked + .switch-slider {
+      background-color: #0284c7;
+    }
+
+    input:checked + .switch-slider:before {
+      transform: translateX(16px);
+    }
+
+    /* Markers & Popups */
+    .custom-city-marker {
+      background: transparent;
+      border: none;
+    }
+
+    .marker-label-tag {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.94);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      color: #fff;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+      font-family: var(--font-sans);
+    }
+
+    .leaflet-popup-content-wrapper {
+      background: rgba(15, 23, 42, 0.95) !important;
+      color: var(--text-main) !important;
+      border: 1px solid var(--border-accent) !important;
+      border-radius: 8px !important;
+      backdrop-filter: blur(12px) !important;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    .leaflet-popup-tip {
+      background: rgba(15, 23, 42, 0.95) !important;
+      border: 1px solid var(--border-accent) !important;
+    }
+
+    .gis-popup {
+      font-family: var(--font-sans);
+      padding: 4px;
+      min-width: 220px;
+    }
+
+    .gis-popup-header {
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+    }
+
+    .gis-popup-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .gis-popup-coords {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--accent-sky);
+    }
+
+    .gis-popup-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 3px 0;
+      color: var(--text-muted);
+    }
+
+    .gis-popup-row strong {
+      color: #fff;
+      font-family: var(--font-mono);
+    }
+
+    /* Notification Toast */
+    .gis-toast {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(15, 23, 42, 0.96);
+      color: #f8fafc;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 1200;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .gis-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Leaflet Controls Styling & Collision Prevention with Quick Tools */
+    .leaflet-top.leaflet-left .leaflet-control-zoom {
+      margin-top: 104px !important;
+      margin-left: 16px !important;
+      border: 1px solid var(--border-subtle) !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+      border-radius: 6px !important;
+      overflow: hidden;
+    }
+
+    .leaflet-control-zoom a {
+      background: rgba(15, 23, 42, 0.94) !important;
+      color: #f8fafc !important;
+      border-color: rgba(148, 163, 184, 0.25) !important;
+      transition: all 0.15s ease;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: rgba(30, 41, 59, 1) !important;
+      color: var(--accent-sky) !important;
+    }
+
+    /* Mobile Navigation & Hamburger */
+    .mobile-nav-toggle-wrap {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mobile-hamburger-btn {
+      padding: 6px 10px;
+      font-size: 12px;
+      gap: 6px;
+    }
+
+    .mobile-menu-drawer {
+      position: absolute;
+      top: 52px;
+      left: 0;
+      right: 0;
+      background: rgba(11, 19, 32, 0.98);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-accent);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+      padding: 14px 16px;
+      z-index: 1050;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transform: translateY(-115%);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    }
+
+    .mobile-menu-drawer.open {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .mobile-menu-section-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent-sky);
+      margin-bottom: 2px;
+    }
+
+    .mobile-menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+      gap: 8px;
+    }
+
+    .mobile-menu-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mobile-action-btn {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .close-sidebar-btn {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      padding: 3px 8px;
+      font-size: 13px;
+      line-height: 1;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .close-sidebar-btn:hover {
+      background: rgba(239, 68, 68, 0.3);
+      color: #fff;
+    }
+
+    /* Responsive Rules */
+    @media (max-width: 900px) {
+      aside.gis-sidebar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-width: 360px;
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .desktop-nav {
+        display: none !important;
+      }
+
+      .mobile-nav-toggle-wrap {
+        display: flex;
+      }
+
+      aside.gis-sidebar {
+        width: 100%;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 600px) {
+      header.gis-header {
+        padding: 0 10px;
+      }
+      .brand-sub {
+        display: none;
+      }
+      .quick-tools-box {
+        top: 10px;
+        left: 10px;
+      }
+      .layer-control-wrapper {
+        top: 10px;
+        right: 10px;
+      }
+      .leaflet-top.leaflet-left .leaflet-control-zoom {
+        margin-top: 96px !important;
+        margin-left: 10px !important;
+      }
+      .radar-legend-box {
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 16px);
+        padding: 5px 8px;
+      }
+      .legend-cat-badge:not(.essential) {
+        display: none;
+      }
+      .siata-ticks-h {
+        font-size: 8.5px;
+      }
+    }
+
+    @keyframes pulseLive {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.8); }
+    }
+    .live-pulse-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 6px #10b981;
+      animation: pulseLive 2s ease-in-out infinite;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    @keyframes spinAnim {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .spin-icon {
+      animation: spinAnim 0.8s linear infinite !important;
+      transform-origin: center center;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Top Navigation Header -->
+    <header class="gis-header">
+      <div class="brand-group">
+        <button class="brand-reload-btn" id="btn-reload-page" title="Recargar página y datos" onclick="window.location.reload()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Flechas circulares de recarga -->
+            <path d="M3.5 12a8.5 8.5 0 0 1 8.5-8.5 9 9 0 0 1 6.3 2.6L20.5 8" stroke="#38bdf8" stroke-width="1.8"/>
+            <polyline points="20.5 3.5 20.5 8 16 8" stroke="#38bdf8" stroke-width="1.8"/>
+            <path d="M20.5 12a8.5 8.5 0 0 1-8.5 8.5 9 9 0 0 1-6.3-2.6L3.5 16" stroke="#38bdf8" stroke-width="1.8"/>
+            <polyline points="3.5 20.5 3.5 16 8 16" stroke="#38bdf8" stroke-width="1.8"/>
+            <!-- Planeta Tierra en el centro -->
+            <circle cx="12" cy="12" r="4.2" stroke="#ffffff" stroke-width="1.3" fill="rgba(14, 165, 233, 0.4)"/>
+            <path d="M7.8 12h8.4" stroke="#ffffff" stroke-width="0.9"/>
+            <ellipse cx="12" cy="12" rx="2" ry="4.2" stroke="#38bdf8" stroke-width="0.9" fill="none"/>
+          </svg>
+        </button>
+        <span class="brand-title">GeoVisor Antioquia</span>
+      </div>
+
+      <div class="header-nav desktop-nav">
+        <!-- Presets de Enfoque -->
+        <button class="gis-btn" id="btn-zoom-all" title="Ver todo Antioquia Central">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          Antioquia
+        </button>
+        <button class="gis-btn" id="btn-zoom-aburra" title="Enfocar Valle de Aburrá">Valle de Aburrá</button>
+        <button class="gis-btn" id="btn-zoom-oriente" title="Enfocar Oriente Antioqueño">Oriente</button>
+
+        <!-- Simulación / Tiempo Real Toggle -->
+        <button class="gis-btn" id="btn-toggle-sim" title="Alternar entre Tiempo Real (Open-Meteo) y Simulación de Frente de Lluvia SIATA">
+          <span id="sim-icon">⚡</span>
+          <span id="sim-label">Simular Frente</span>
+        </button>
+
+        <!-- Toggle Sidebar -->
+        <button class="gis-btn" id="btn-toggle-sidebar" title="Abrir/Cerrar panel de municipios">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span>Municipios</span>
+        </button>
+      </div>
+
+      <!-- Mobile Hamburger Toggle -->
+      <div class="mobile-nav-toggle-wrap">
+        <button class="gis-btn mobile-hamburger-btn" id="btn-hamburger" aria-label="Abrir menú de navegación" title="Menú de opciones">
+          <svg id="icon-hamburger" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+          <svg id="icon-hamburger-close" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="display:none;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+          <span>Menú</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Mobile Navigation Drawer -->
+    <div class="mobile-menu-drawer" id="mobile-menu-drawer">
+      <div class="mobile-menu-section-title">Enfoque Geográfico</div>
+      <div class="mobile-menu-grid">
+        <button class="gis-btn mobile-action-btn" id="mob-zoom-all">
+          <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          Antioquia
+        </button>
+        <button class="gis-btn mobile-action-btn" id="mob-zoom-aburra">Valle de Aburrá</button>
+        <button class="gis-btn mobile-action-btn" id="mob-zoom-oriente">Oriente</button>
+      </div>
+
+      <div class="mobile-menu-section-title" style="margin-top: 6px;">Opciones y Capas</div>
+      <div class="mobile-menu-col">
+        <button class="gis-btn mobile-action-btn" id="mob-toggle-sidebar" style="justify-content: flex-start;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span>Ver Lista de Municipios (18)</span>
+        </button>
+        <button class="gis-btn mobile-action-btn" id="mob-toggle-layers" style="justify-content: flex-start;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          <span>Capas y Transparencia</span>
+        </button>
+        <button class="gis-btn mobile-action-btn" id="mob-toggle-sim" style="justify-content: flex-start;">
+          <span id="mob-sim-icon">⚡</span>
+          <span id="mob-sim-label">Simular Frente de Lluvia</span>
+        </button>
+        <button class="gis-btn mobile-action-btn" id="mob-btn-gps" style="justify-content: flex-start;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v2m0 16v2m8-10h2M2 12h2m15.071 7.071l-1.414-1.414M4.343 4.343l1.414 1.414m12.728 0l-1.414 1.414M5.757 18.243l-1.414 1.414M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Mi Ubicación GPS</span>
+        </button>
+        <button class="gis-btn mobile-action-btn" id="mob-btn-refresh" style="justify-content: flex-start;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>Refrescar Mediciones</span>
+        </button>
+      </div>
+    </div>
+    </header>
+
+    <!-- Workspace Body -->
+    <div id="workspace">
+      <!-- Main Map Stage -->
+      <main id="map-viewport">
+        <div id="map"></div>
+
+        <!-- Notification Toast -->
+        <div class="gis-toast" id="gis-toast">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span id="toast-message">Mensaje informativo</span>
+        </div>
+
+        <!-- Quick GPS & Map Tools (Top Left) -->
+        <div class="quick-tools-box">
+          <button class="gis-btn" id="btn-gps" title="Ubicar mi posición actual con GPS">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v2m0 16v2m8-10h2M2 12h2m15.071 7.071l-1.414-1.414M4.343 4.343l1.414 1.414m12.728 0l-1.414 1.414M5.757 18.243l-1.414 1.414M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span id="label-gps">Mi GPS</span>
+          </button>
+          <button class="gis-btn" id="btn-refresh-data" title="Actualizar datos de lluvia y sincronizar con Open-Meteo">
+            <svg id="icon-refresh-btn" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span id="label-refresh-btn">Refrescar</span>
+          </button>
+        </div>
+
+        <!-- Floating Collapsible Layer Controls (Top Right) -->
+        <div class="layer-control-wrapper" id="layer-control-wrapper">
+          <button class="gis-btn layer-trigger-btn" id="btn-toggle-layers" title="Mostrar/ocultar panel de capas y opacidad">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+            </svg>
+            <span>Capas</span>
+            <span class="layer-chevron" id="layer-chevron">▾</span>
+          </button>
+
+          <div class="floating-layer-panel collapsed" id="floating-layer-panel">
+            <div class="layer-heading">Capas del Visor</div>
+
+            <label class="layer-toggle-row">
+              <span>Precipitaciones</span>
+              <label class="custom-switch">
+                <input type="checkbox" id="layer-toggle-clouds" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </label>
+
+            <label class="layer-toggle-row">
+              <span>Marcadores Valle de Aburrá</span>
+              <label class="custom-switch">
+                <input type="checkbox" id="layer-toggle-aburra" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </label>
+
+            <label class="layer-toggle-row">
+              <span>Marcadores Oriente</span>
+              <label class="custom-switch">
+                <input type="checkbox" id="layer-toggle-oriente" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </label>
+
+            <div style="margin-top: 4px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom: 4px; color: var(--text-dim); font-size: 10px;">
+                <span>Opacidad de Precipitaciones</span>
+                <span id="opacity-val" style="font-family: var(--font-mono);">80%</span>
+              </div>
+              <input type="range" min="10" max="100" value="80" class="gis-slider" id="radar-opacity-slider">
+            </div>
+
+            <div style="margin-top: 4px; border-top: 1px solid var(--border-subtle); padding-top: 6px;">
+              <div style="color: var(--text-dim); font-size: 10px; margin-bottom: 4px;">Mapa Base</div>
+              <select id="select-basemap" style="width: 100%; background: #1e293b; color: #fff; border: 1px solid var(--border-subtle); border-radius: 4px; padding: 4px 6px; font-size: 11px; outline: none;">
+                <option value="esri-dark" selected>Esri World Dark Gray (Dark Mode)</option>
+                <option value="osm">OpenStreetMap Estándar</option>
+                <option value="esri-sat">Satélite Esri World</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elongated Horizontal Radar Legend (Bottom Docked) -->
+        <div class="radar-legend-box" id="radar-legend">
+          <div class="legend-top-row">
+            <div class="legend-title-wrap">
+              <span class="legend-title">Precipitación radar</span>
+              <span class="legend-sub">Reflectividad dBZ</span>
+            </div>
+            <div class="legend-categories-row">
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#0284c7;"></span>Bajas (10-20)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#10b981;"></span>Lig (20-30)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#eab308;"></span>Mod (30-40)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#dc2626;"></span>Altas (40-55)</span>
+              <span class="legend-cat-badge essential"><span class="legend-cat-dot" style="background:#f472b6;"></span>Granizo (&gt;55)</span>
+            </div>
+          </div>
+          <div class="siata-gradient-bar-h"></div>
+          <div class="siata-ticks-h">
+            <span>0</span>
+            <span>10</span>
+            <span>20</span>
+            <span>30</span>
+            <span>40</span>
+            <span>50</span>
+            <span>60</span>
+            <span>70</span>
+            <span>80 dBZ</span>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Sidebar: Municipalities Weather & Region List -->
+      <aside class="gis-sidebar collapsed" id="gis-sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z"/></svg>
+            <span>Monitoreo de Lluvia</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="font-size: 11px; font-family: var(--font-mono); color: var(--accent-emerald);" id="last-updated-clock">
+              Actualizando...
+            </div>
+            <button class="close-sidebar-btn" id="btn-close-sidebar" title="Cerrar lista de municipios">✕</button>
+          </div>
+        </div>
+
+        <div class="sidebar-content">
+          <!-- Summary Banner -->
+          <div class="rain-summary-card">
+            <div class="summary-title">
+              <span id="summary-rain-icon">🌧️</span>
+              <span id="summary-rain-count">Consultando 18 municipios...</span>
+            </div>
+            <div class="summary-meta-row">
+              <span id="summary-update-time">Última actualización: --:--</span>
+              <button class="gis-btn" id="btn-banner-refresh" style="padding: 2px 8px; font-size: 10px;">Refrescar</button>
+            </div>
+          </div>
+
+          <!-- Region Filter Bar -->
+          <div class="region-filter-bar">
+            <button class="filter-tab active" data-filter="all">Todos (18)</button>
+            <button class="filter-tab" data-filter="aburra">Valle de Aburrá</button>
+            <button class="filter-tab" data-filter="oriente">Oriente</button>
+            <button class="filter-tab" data-filter="raining">Lloviendo</button>
+          </div>
+
+          <!-- Municipalities List -->
+          <div class="cities-list-wrap" id="cities-list-container">
+            <div style="text-align:center; padding:20px; color:var(--text-dim); font-size:12px;">Cargando municipios...</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Leaflet JS (CDN) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <script>
+    /**
+     * GeoVisor Antioquia - Nubes de Lluvia & 18 Municipios
+     */
+
+    // --- 1. Definición Completa de Municipios (18 Municipios Reales) ---
+    const MUNICIPALITIES = [
+      // Valle de Aburrá (10 municipios)
+      { id: 'medellin', name: 'Medellín', region: 'aburra', lat: 6.2442, lng: -75.5812, alt: 1495, rain: 0, prob: 0, temp: 0 },
+      { id: 'bello', name: 'Bello', region: 'aburra', lat: 6.3373, lng: -75.5579, alt: 1450, rain: 0, prob: 0, temp: 0 },
+      { id: 'itagui', name: 'Itagüí', region: 'aburra', lat: 6.1846, lng: -75.5991, alt: 1550, rain: 0, prob: 0, temp: 0 },
+      { id: 'envigado', name: 'Envigado', region: 'aburra', lat: 6.1759, lng: -75.5917, alt: 1575, rain: 0, prob: 0, temp: 0 },
+      { id: 'sabaneta', name: 'Sabaneta', region: 'aburra', lat: 6.1515, lng: -75.6163, alt: 1550, rain: 0, prob: 0, temp: 0 },
+      { id: 'caldas', name: 'Caldas', region: 'aburra', lat: 6.0911, lng: -75.6357, alt: 1750, rain: 0, prob: 0, temp: 0 },
+      { id: 'laestrella', name: 'La Estrella', region: 'aburra', lat: 6.1578, lng: -75.6433, alt: 1775, rain: 0, prob: 0, temp: 0 },
+      { id: 'copacabana', name: 'Copacabana', region: 'aburra', lat: 6.3467, lng: -75.5089, alt: 1450, rain: 0, prob: 0, temp: 0 },
+      { id: 'girardota', name: 'Girardota', region: 'aburra', lat: 6.3756, lng: -75.4457, alt: 1425, rain: 0, prob: 0, temp: 0 },
+      { id: 'barbosa', name: 'Barbosa', region: 'aburra', lat: 6.4383, lng: -75.3314, alt: 1300, rain: 0, prob: 0, temp: 0 },
+
+      // Oriente Antioqueño (8 municipios)
+      { id: 'rionegro', name: 'Rionegro', region: 'oriente', lat: 6.1552, lng: -75.3739, alt: 2125, rain: 0, prob: 0, temp: 0 },
+      { id: 'laceja', name: 'La Ceja', region: 'oriente', lat: 6.0311, lng: -75.4310, alt: 2200, rain: 0, prob: 0, temp: 0 },
+      { id: 'marinilla', name: 'Marinilla', region: 'oriente', lat: 6.1738, lng: -75.3377, alt: 2120, rain: 0, prob: 0, temp: 0 },
+      { id: 'guarne', name: 'Guarne', region: 'oriente', lat: 6.2803, lng: -75.4428, alt: 2150, rain: 0, prob: 0, temp: 0 },
+      { id: 'elcarmen', name: 'El Carmen de Viboral', region: 'oriente', lat: 6.0833, lng: -75.3333, alt: 2150, rain: 0, prob: 0, temp: 0 },
+      { id: 'elretiro', name: 'El Retiro', region: 'oriente', lat: 6.0583, lng: -75.5033, alt: 2175, rain: 0, prob: 0, temp: 0 },
+      { id: 'elsantuario', name: 'El Santuario', region: 'oriente', lat: 6.1389, lng: -75.2639, alt: 2150, rain: 0, prob: 0, temp: 0 },
+      { id: 'sanvicente', name: 'San Vicente Ferrer', region: 'oriente', lat: 6.2833, lng: -75.3333, alt: 2150, rain: 0, prob: 0, temp: 0 }
+    ];
+
+    // --- 2. Coordenadas de la Malla de Muestreo (36 puntos para la nube) ---
+    const GRID_POINTS = [];
+    for (let lat = 5.95; lat <= 6.4501; lat += 0.1) {
+      for (let lng = -75.75; lng <= -75.2499; lng += 0.1) {
+        GRID_POINTS.push({
+          lat: Math.round(lat * 100) / 100,
+          lng: Math.round(lng * 100) / 100,
+          rain: 0,
+          prob: 0,
+          weatherCode: 0,
+          rectangle: null
+        });
+      }
+    }
+
+    // --- 3. Variables de Estado ---
+    let map = null;
+    let baseLayers = {};
+    let activeBaseLayer = null;
+
+    let cloudOverlay = null;        // Capa de nubes orgánicas suavizadas (efecto radar SIATA)
+    let radarRingsGroup = null;     // Anillos concéntricos de alcance radar (SIATA)
+    let gridLayerGroup = null;      // Capa opcional de celdas
+    let markersAburraGroup = null;  // Marcadores Valle de Aburrá
+    let markersOrienteGroup = null; // Marcadores Oriente
+    let userLocationMarker = null;
+
+    let cloudOpacity = 0.8;
+    let currentFilter = 'all';
+    let isSimulated = false;        // Modo demostración de frente de lluvia
+
+    // Coordenadas oficiales de la antena del Radar Meteorológico del SIATA (Cerro Santa Elena)
+    const SIATA_RADAR_COORDS = [6.2080, -75.4980];
+
+    // Límites de la región de nubes de lluvia (Antioquia Central: Valle de Aburrá & Oriente)
+    const CLOUD_BOUNDS = [
+      [5.85, -75.85],
+      [6.55, -75.15]
+    ];
+
+    // Relación Z-R para estimar Reflectividad de Radar (dBZ) a partir de precipitación (mm/h)
+    // Convectiva / Marshall-Palmer adaptada a ecos Doppler SIATA (Antioquia)
+    function mmhToDbz(mmh) {
+      if (!mmh || mmh < 0.15) return 0; // Umbral de detección radar (filtra ruido/virga < 0.15 mm/h)
+      const z = 200 * Math.pow(mmh, 1.6);
+      let dbz = 10 * Math.log10(z);
+      // Factor convectivo para tormentas tropicales andinas intensas
+      if (mmh >= 15) {
+        dbz += Math.min(15, (mmh - 15) * 0.6);
+      }
+      return Math.min(80, Math.round(dbz));
+    }
+
+    function getDbzCategory(dbz) {
+      if (dbz >= 60) return { label: 'Granizo probable', color: '#f472b6', tier: 'hail' };
+      if (dbz >= 50) return { label: 'Tormenta severa', color: '#9333ea', tier: 'hail' };
+      if (dbz >= 42) return { label: 'Intensidades muy altas', color: '#dc2626', tier: 'heavy' };
+      if (dbz >= 34) return { label: 'Intensidades altas', color: '#ea580c', tier: 'heavy' };
+      if (dbz >= 24) return { label: 'Intensidades moderadas', color: '#eab308', tier: 'moderate' };
+      if (dbz >= 18) return { label: 'Intensidades ligeras', color: '#10b981', tier: 'light' };
+      if (dbz >= 10) return { label: 'Intensidades bajas', color: '#0284c7', tier: 'light' };
+      return { label: 'Seco / Sin nubes activas', color: '#64748b', tier: 'dry' };
+    }
+
+    // --- 4. Inicialización del Mapa ---
+    function initMap() {
+      map = L.map('map', {
+        center: [6.18, -75.45],
+        zoom: 11,
+        zoomControl: false,
+        attributionControl: false
+      });
+
+      L.control.zoom({ position: 'topleft' }).addTo(map);
+
+      L.control.attribution({
+        position: 'bottomright',
+        prefix: 'Leaflet · Datos meteorológicos: Open-Meteo'
+      }).addTo(map);
+
+      // Mapas Base
+      baseLayers['esri-dark'] = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        maxNativeZoom: 16,
+        maxZoom: 18,
+        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+      });
+
+      baseLayers['osm'] = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap contributors'
+      });
+
+      baseLayers['esri-sat'] = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18,
+        attribution: 'Tiles &copy; Esri'
+      });
+
+      activeBaseLayer = baseLayers['esri-dark'];
+      activeBaseLayer.addTo(map);
+
+      // Grupos de capas
+      gridLayerGroup = L.layerGroup();
+      markersAburraGroup = L.layerGroup().addTo(map);
+      markersOrienteGroup = L.layerGroup().addTo(map);
+
+      createRadarRings();
+      createMunicipalityMarkers();
+      setupEventListeners();
+
+      // Cargar datos de Open-Meteo
+      fetchMeteorologicalData();
+    }
+
+    // --- 4.1 Anillos Concéntricos de Alcance Radar (SIATA) ---
+    function createRadarRings() {
+      radarRingsGroup = L.layerGroup();
+      const rangesKm = [10, 25, 45, 65];
+
+      rangesKm.forEach(km => {
+        const circle = L.circle(SIATA_RADAR_COORDS, {
+          radius: km * 1000,
+          color: '#64748b',
+          weight: 1,
+          dashArray: '5, 8',
+          fill: false,
+          opacity: 0.35,
+          interactive: false
+        });
+        circle.addTo(radarRingsGroup);
+      });
+
+      radarRingsGroup.addTo(map);
+    }
+
+    // Generador de contenido HTML dinámico para los popups de municipios
+    function getCityPopupHtml(city) {
+      const isAburra = city.region === 'aburra';
+      const rainVal = (typeof city.rain === 'number') ? city.rain.toFixed(1) : '0.0';
+      const dbz = mmhToDbz(city.rain || 0);
+      const cat = getDbzCategory(dbz);
+      const probVal = (city.prob !== undefined && city.prob !== null && !isNaN(city.prob)) ? city.prob : '--';
+      const tempVal = (city.temp !== undefined && city.temp !== null && city.temp !== '--') ? city.temp : '--';
+      const reportStr = city.reportTime ? `${city.reportTime} COT` : 'Tiempo real';
+
+      return `
+        <div class="gis-popup">
+          <div class="gis-popup-header">
+            <div class="gis-popup-title">${city.name}</div>
+            <div class="gis-popup-coords">${isAburra ? 'Valle de Aburrá' : 'Oriente Antioqueño'} · ${city.alt} msnm</div>
+          </div>
+          <div class="gis-popup-row"><span>Precipitación:</span><strong>${rainVal} mm/h</strong></div>
+          <div class="gis-popup-row"><span>Reflectividad radar:</span><strong style="color:${cat.color};">${dbz} dBZ (${cat.label})</strong></div>
+          <div class="gis-popup-row"><span>Probabilidad (esta hora):</span><strong>${probVal}%</strong></div>
+          <div class="gis-popup-row"><span>Temperatura:</span><strong>${tempVal} °C</strong></div>
+          <div class="gis-popup-row" style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--border-subtle); font-size: 10px; color: var(--text-dim); display: flex; justify-content: space-between;">
+            <span>Sincronización:</span>
+            <span style="color: var(--accent-emerald); font-weight: 600;"><span class="live-pulse-dot" style="width:6px; height:6px; margin-right:3px;"></span>${reportStr}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- 5. Marcadores de los 18 Municipios ---
+    function createMunicipalityMarkers() {
+      markersAburraGroup.clearLayers();
+      markersOrienteGroup.clearLayers();
+
+      MUNICIPALITIES.forEach(city => {
+        const isAburra = city.region === 'aburra';
+        const color = isAburra ? '#0284c7' : '#0d9488';
+
+        const iconHtml = `
+          <div style="position: relative; cursor: pointer;">
+            <div style="width: 12px; height: 12px; background: ${color}; border: 2px solid #ffffff; border-radius: 50%; box-shadow: 0 0 10px ${color};"></div>
+            <div class="marker-label-tag">${city.name}</div>
+          </div>
+        `;
+
+        const customIcon = L.divIcon({
+          className: 'custom-city-marker',
+          html: iconHtml,
+          iconSize: [16, 16],
+          iconAnchor: [6, 6]
+        });
+
+        const marker = L.marker([city.lat, city.lng], { icon: customIcon });
+
+        // Función dinámica de popup: siempre evalúa los datos más recientes del municipio al abrir
+        marker.bindPopup(() => getCityPopupHtml(city), { maxWidth: 260 });
+
+        if (isAburra) {
+          marker.addTo(markersAburraGroup);
+        } else {
+          marker.addTo(markersOrienteGroup);
+        }
+
+        city.marker = marker;
+      });
+    }
+
+    // Función para generar el gradiente radial auténtico según la categoría dBZ del radar
+    function createRadarRadialGradient(ctx, x, y, r, dbz) {
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      if (dbz >= 60) {
+        // Granizo / Tormenta Severa (> 60 dBZ): Rosa/Blanco -> Magenta -> Morado -> Rojo -> Naranja -> Amarillo -> Verde -> Azul -> Transparente
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+        grad.addColorStop(0.14, 'rgba(244, 114, 182, 0.95)'); // Rosa (#f472b6)
+        grad.addColorStop(0.28, 'rgba(217, 70, 239, 0.9)');   // Magenta (#d946ef)
+        grad.addColorStop(0.44, 'rgba(147, 51, 234, 0.85)');  // Morado (#9333ea)
+        grad.addColorStop(0.58, 'rgba(220, 38, 38, 0.82)');  // Rojo (#dc2626)
+        grad.addColorStop(0.72, 'rgba(234, 88, 12, 0.75)');  // Naranja (#ea580c)
+        grad.addColorStop(0.82, 'rgba(234, 179, 8, 0.65)');  // Amarillo (#eab308)
+        grad.addColorStop(0.9, 'rgba(16, 185, 129, 0.5)');   // Verde (#10b981)
+        grad.addColorStop(0.96, 'rgba(2, 132, 199, 0.35)');  // Azul (#0284c7)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      } else if (dbz >= 50) {
+        // Tormenta Severa (50-60 dBZ): Morado -> Rojo -> Naranja -> Amarillo -> Verde -> Azul -> Transparente
+        grad.addColorStop(0, 'rgba(147, 51, 234, 0.95)');   // Morado (#9333ea)
+        grad.addColorStop(0.26, 'rgba(220, 38, 38, 0.88)'); // Rojo (#dc2626)
+        grad.addColorStop(0.48, 'rgba(234, 88, 12, 0.8)');  // Naranja (#ea580c)
+        grad.addColorStop(0.68, 'rgba(234, 179, 8, 0.7)');  // Amarillo (#eab308)
+        grad.addColorStop(0.84, 'rgba(16, 185, 129, 0.55)');// Verde (#10b981)
+        grad.addColorStop(0.95, 'rgba(2, 132, 199, 0.35)'); // Azul (#0284c7)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      } else if (dbz >= 42) {
+        // Intensidades Muy Altas (42-50 dBZ): Rojo -> Naranja -> Amarillo -> Verde -> Azul -> Transparente
+        grad.addColorStop(0, 'rgba(220, 38, 38, 0.95)');    // Rojo (#dc2626)
+        grad.addColorStop(0.3, 'rgba(234, 88, 12, 0.85)');  // Naranja (#ea580c)
+        grad.addColorStop(0.58, 'rgba(234, 179, 8, 0.72)'); // Amarillo (#eab308)
+        grad.addColorStop(0.8, 'rgba(16, 185, 129, 0.55)'); // Verde (#10b981)
+        grad.addColorStop(0.94, 'rgba(2, 132, 199, 0.35)'); // Azul (#0284c7)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      } else if (dbz >= 34) {
+        // Intensidades Altas (34-42 dBZ): Naranja -> Amarillo -> Verde -> Azul -> Transparente
+        grad.addColorStop(0, 'rgba(234, 88, 12, 0.92)');    // Naranja (#ea580c)
+        grad.addColorStop(0.38, 'rgba(234, 179, 8, 0.8)');  // Amarillo (#eab308)
+        grad.addColorStop(0.7, 'rgba(16, 185, 129, 0.6)');  // Verde (#10b981)
+        grad.addColorStop(0.9, 'rgba(2, 132, 199, 0.35)');  // Azul (#0284c7)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      } else if (dbz >= 24) {
+        // Intensidades Moderadas (24-34 dBZ): Amarillo -> Verde -> Azul -> Transparente
+        grad.addColorStop(0, 'rgba(234, 179, 8, 0.9)');     // Amarillo (#eab308)
+        grad.addColorStop(0.45, 'rgba(16, 185, 129, 0.72)');// Verde (#10b981)
+        grad.addColorStop(0.82, 'rgba(2, 132, 199, 0.45)'); // Azul (#0284c7)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      } else if (dbz >= 18) {
+        // Intensidades Ligeras (18-24 dBZ): Verde -> Azul -> Transparente
+        grad.addColorStop(0, 'rgba(16, 185, 129, 0.88)');   // Verde (#10b981)
+        grad.addColorStop(0.55, 'rgba(2, 132, 199, 0.55)'); // Azul (#0284c7)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      } else {
+        // Intensidades Bajas (10-18 dBZ): Azul -> Transparente
+        grad.addColorStop(0, 'rgba(2, 132, 199, 0.85)');    // Azul (#0284c7)
+        grad.addColorStop(0.65, 'rgba(14, 165, 233, 0.45)');// Sky (#0ea5e9)
+        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
+      }
+      return grad;
+    }
+
+    // Actualiza los colores de los marcadores en el mapa según el estado de lluvia y reflectividad
+    function updateMarkerIcons() {
+      MUNICIPALITIES.forEach(city => {
+        if (!city.marker) return;
+        const isAburra = city.region === 'aburra';
+        const isRaining = city.rain >= 0.15;
+        const dbz = mmhToDbz(city.rain || 0);
+        const cat = getDbzCategory(dbz);
+
+        const baseColor = isRaining ? cat.color : (isAburra ? '#0284c7' : '#0d9488');
+        const glow = isRaining
+          ? `0 0 14px ${cat.color}, 0 0 4px #ffffff`
+          : `0 0 8px ${baseColor}`;
+
+        const iconHtml = `
+          <div style="position: relative; cursor: pointer;">
+            <div style="width: 12px; height: 12px; background: ${baseColor}; border: 2px solid #ffffff; border-radius: 50%; box-shadow: ${glow}; transition: all 0.3s ease;"></div>
+            <div class="marker-label-tag">${city.name}</div>
+          </div>
+        `;
+
+        city.marker.setIcon(L.divIcon({
+          className: 'custom-city-marker',
+          html: iconHtml,
+          iconSize: [16, 16],
+          iconAnchor: [6, 6]
+        }));
+      });
+    }
+
+    // --- 6. Generación del Efecto "Nubes de Lluvia" (Radar Interpolado Suave SIATA) ---
+    // Recrea ecos de reflectividad meteorológica orgánicos y amorfos con gradientes continuos y paleta oficial SIATA
+    function generateCloudRadarTexture() {
+      const canvas = document.createElement('canvas');
+      const w = 800;
+      const h = 800;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      const minLat = CLOUD_BOUNDS[0][0];
+      const maxLat = CLOUD_BOUNDS[1][0];
+      const minLng = CLOUD_BOUNDS[0][1];
+      const maxLng = CLOUD_BOUNDS[1][1];
+
+      function latLngToCanvas(lat, lng) {
+        const x = ((lng - minLng) / (maxLng - minLng)) * w;
+        const y = ((maxLat - lat) / (maxLat - minLat)) * h;
+        return { x, y };
+      }
+
+      // Puntos con lluvia activa verificada (filtra ruido de modelo < 0.15 mm/h o < 10 dBZ)
+      const activePoints = [];
+      MUNICIPALITIES.forEach(m => {
+        if (m.rain >= 0.15) {
+          activePoints.push({ lat: m.lat, lng: m.lng, rain: m.rain });
+        }
+      });
+      GRID_POINTS.forEach(p => {
+        if (p.rain >= 0.25) {
+          activePoints.push({ lat: p.lat, lng: p.lng, rain: p.rain });
+        }
+      });
+
+      if (activePoints.length === 0) {
+        return canvas.toDataURL('image/png');
+      }
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.filter = 'blur(6px)'; // Suavizado orgánico sin perder la fidelidad cromática del núcleo
+
+      // Renderizar cada eco de reflectividad con núcleo y filamentos asimétricos
+      activePoints.forEach((pt, pIdx) => {
+        const center = latLngToCanvas(pt.lat, pt.lng);
+        const mm = pt.rain;
+        const dbz = mmhToDbz(mm);
+        if (dbz < 10) return;
+
+        // Radio base de la nube según tasa de lluvia e intensidad dBZ
+        let baseRadius = 38;
+        if (dbz >= 20) baseRadius = 48;
+        if (dbz >= 30) baseRadius = 60;
+        if (dbz >= 40) baseRadius = 75;
+        if (dbz >= 50) baseRadius = 90;
+
+        // Ecos satélite secundarios para darle forma orgánica y no circular rígida
+        const blobs = [
+          { x: center.x, y: center.y, r: baseRadius, dbz: dbz },
+          { x: center.x + Math.sin(pIdx * 1.7) * (baseRadius * 0.35), y: center.y + Math.cos(pIdx * 1.7) * (baseRadius * 0.3), r: baseRadius * 0.72, dbz: Math.max(10, dbz - 4) },
+          { x: center.x - Math.cos(pIdx * 2.3) * (baseRadius * 0.3), y: center.y - Math.sin(pIdx * 2.3) * (baseRadius * 0.35), r: baseRadius * 0.6, dbz: Math.max(10, dbz - 7) }
+        ];
+
+        blobs.forEach(b => {
+          ctx.fillStyle = createRadarRadialGradient(ctx, b.x, b.y, b.r, b.dbz);
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      });
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function updateCloudOverlay() {
+      const dataUrl = generateCloudRadarTexture();
+
+      if (!cloudOverlay) {
+        cloudOverlay = L.imageOverlay(dataUrl, CLOUD_BOUNDS, {
+          opacity: cloudOpacity,
+          interactive: false,
+          zIndex: 350
+        });
+
+        const isCloudsActive = document.getElementById('layer-toggle-clouds').checked;
+        if (isCloudsActive) {
+          cloudOverlay.addTo(map);
+        }
+      } else {
+        cloudOverlay.setUrl(dataUrl);
+        cloudOverlay.setOpacity(cloudOpacity);
+      }
+    }
+
+    // Helper: Encuentra el índice exacto de la hora actual en el array hourly.time de Open-Meteo
+    function getHourIndex(hourlyTimes, currentIsoTime) {
+      if (!hourlyTimes || !Array.isArray(hourlyTimes) || hourlyTimes.length === 0) return 0;
+      if (!currentIsoTime) return 0;
+      const targetHourIso = currentIsoTime.slice(0, 13) + ':00';
+      const exactIdx = hourlyTimes.indexOf(targetHourIso);
+      if (exactIdx !== -1) return exactIdx;
+
+      // Búsqueda por proximidad horaria
+      const targetTimeMs = new Date(currentIsoTime).getTime();
+      let bestIdx = 0;
+      let minDiff = Infinity;
+      for (let i = 0; i < hourlyTimes.length; i++) {
+        const diff = Math.abs(new Date(hourlyTimes[i]).getTime() - targetTimeMs);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestIdx = i;
+        }
+      }
+      return bestIdx;
+    }
+
+    // --- 7. Consulta a Open-Meteo (Malla + 18 Municipios en 1 Sola Petición) ---
+    async function fetchMeteorologicalData() {
+      if (isSimulated) {
+        applySimulatedStormFront();
+        return;
+      }
+
+      const clock = document.getElementById('last-updated-clock');
+      const refreshIcon = document.getElementById('icon-refresh-btn');
+      const refreshLabel = document.getElementById('label-refresh-btn');
+      const planetReloadBtn = document.getElementById('btn-reload-page');
+
+      if (refreshIcon) refreshIcon.classList.add('spin-icon');
+      if (planetReloadBtn) planetReloadBtn.classList.add('spin-icon');
+      if (refreshLabel) refreshLabel.textContent = 'Cargando...';
+      if (clock) {
+        clock.innerHTML = `<span style="color: var(--accent-sky);">Sincronizando...</span>`;
+      }
+
+      const allLats = [];
+      const allLngs = [];
+
+      // 36 puntos de la malla
+      GRID_POINTS.forEach(pt => {
+        allLats.push(pt.lat);
+        allLngs.push(pt.lng);
+      });
+
+      // 18 municipios
+      MUNICIPALITIES.forEach(m => {
+        allLats.push(m.lat);
+        allLngs.push(m.lng);
+      });
+
+      // Petición a Open-Meteo con cache-buster para garantizar datos en vivo y sincronizados
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${allLats.join(',')}&longitude=${allLngs.join(',')}&current=precipitation,rain,showers,weather_code,temperature_2m,relative_humidity_2m&hourly=precipitation_probability,precipitation&timezone=America%2FBogota&_ts=${Date.now()}`;
+
+      try {
+        const resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        const dataList = await resp.json();
+        const results = Array.isArray(dataList) ? dataList : [dataList];
+
+        if (results.length < (GRID_POINTS.length + MUNICIPALITIES.length)) {
+          throw new Error('Respuesta incompleta de coordenadas');
+        }
+
+        // Obtener el reporte oficial devuelto por Open-Meteo
+        const sampleRecord = results.find(r => r && r.current && r.current.time) || results[0];
+        let reportHourStr = '';
+        if (sampleRecord && sampleRecord.current && sampleRecord.current.time) {
+          reportHourStr = sampleRecord.current.time.split('T')[1]; // ej: "13:15"
+        }
+
+        // 1. Asignar datos de la malla
+        gridLayerGroup.clearLayers();
+        GRID_POINTS.forEach((pt, idx) => {
+          const itemData = results[idx];
+          if (!itemData || !itemData.current) return;
+
+          const curr = itemData.current;
+          const rain = (typeof curr.precipitation === 'number' ? curr.precipitation : (curr.rain || curr.showers || 0)) || 0;
+
+          // Cálculo dinámico para la hora actual
+          const hourIdx = getHourIndex(itemData.hourly ? itemData.hourly.time : null, curr.time);
+          const prob = (itemData.hourly && itemData.hourly.precipitation_probability && typeof itemData.hourly.precipitation_probability[hourIdx] === 'number')
+            ? itemData.hourly.precipitation_probability[hourIdx]
+            : 0;
+
+          const wCode = curr.weather_code || 0;
+
+          pt.rain = rain;
+          pt.prob = prob;
+          pt.weatherCode = wCode;
+
+          const bounds = [
+            [pt.lat - 0.05, pt.lng - 0.05],
+            [pt.lat + 0.05, pt.lng + 0.05]
+          ];
+          const dbz = mmhToDbz(rain);
+          const cat = getDbzCategory(dbz);
+          const color = cat.color;
+
+          const rect = L.rectangle(bounds, {
+            fillColor: color,
+            fillOpacity: rain > 0.05 ? 0.65 * cloudOpacity : 0.05,
+            color: color,
+            weight: 0.8,
+            opacity: 0.5 * cloudOpacity
+          });
+
+          const isThunder = (wCode === 95 || wCode === 96 || wCode === 99);
+          rect.bindPopup(`
+            <div class="gis-popup">
+              <div class="gis-popup-header">
+                <div class="gis-popup-title">Celda de Malla</div>
+                <div class="gis-popup-coords">${pt.lat.toFixed(2)}° N, ${pt.lng.toFixed(2)}° W</div>
+              </div>
+              <div class="gis-popup-row"><span>Precipitación:</span><strong>${rain.toFixed(1)} mm/h</strong></div>
+              <div class="gis-popup-row"><span>Reflectividad:</span><strong>${dbz} dBZ (${cat.label})</strong></div>
+              <div class="gis-popup-row"><span>Probabilidad (hora actual):</span><strong>${prob}%</strong></div>
+              ${isThunder ? '<div style="margin-top:6px; color:#f43f5e; font-weight:700;">⚡ Aviso: Tormenta eléctrica</div>' : ''}
+              <div class="gis-popup-row" style="margin-top:5px; border-top:1px dashed var(--border-subtle); padding-top:4px; font-size:10px; color:var(--text-dim);">
+                <span>Boletín:</span><span>${reportHourStr || 'En vivo'} COT</span>
+              </div>
+            </div>
+          `);
+          rect.addTo(gridLayerGroup);
+          pt.rectangle = rect;
+        });
+
+        // 2. Asignar datos a los 18 municipios
+        let rainingCount = 0;
+        const gridOffset = GRID_POINTS.length;
+
+        MUNICIPALITIES.forEach((city, idx) => {
+          const cityData = results[gridOffset + idx];
+          if (!cityData || !cityData.current) return;
+
+          const curr = cityData.current;
+          const rain = (typeof curr.precipitation === 'number' ? curr.precipitation : (curr.rain || curr.showers || 0)) || 0;
+
+          // Cálculo dinámico para la hora actual
+          const hourIdx = getHourIndex(cityData.hourly ? cityData.hourly.time : null, curr.time);
+          const prob = (cityData.hourly && cityData.hourly.precipitation_probability && typeof cityData.hourly.precipitation_probability[hourIdx] === 'number')
+            ? cityData.hourly.precipitation_probability[hourIdx]
+            : 0;
+
+          const temp = typeof curr.temperature_2m === 'number' ? curr.temperature_2m : '--';
+          const dbz = mmhToDbz(rain);
+
+          city.rain = rain;
+          city.prob = prob;
+          city.temp = temp;
+          city.dbz = dbz;
+          city.reportTime = curr.time ? curr.time.split('T')[1] : reportHourStr;
+
+          if (rain >= 0.15) rainingCount++;
+
+          if (city.marker && city.marker.getPopup() && city.marker.isPopupOpen()) {
+            city.marker.setPopupContent(getCityPopupHtml(city));
+          }
+        });
+
+        updateCloudOverlay();
+        updateMarkerIcons();
+
+        const now = new Date();
+        const clientFormatted = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const timeDisplay = reportHourStr ? `${reportHourStr} COT` : clientFormatted;
+
+        const bannerCount = document.getElementById('summary-rain-count');
+        const bannerTime = document.getElementById('summary-update-time');
+        const bannerIcon = document.getElementById('summary-rain-icon');
+
+        if (bannerCount) {
+          if (rainingCount > 0) {
+            bannerCount.textContent = `Lluvia activa en ${rainingCount} de ${MUNICIPALITIES.length} municipios`;
+          } else {
+            bannerCount.textContent = `Sin lluvias activas en los 18 municipios`;
+          }
+        }
+        if (bannerTime) {
+          bannerTime.textContent = `Open-Meteo en vivo · Boletín: ${timeDisplay}`;
+        }
+        if (bannerIcon) {
+          bannerIcon.textContent = rainingCount > 0 ? '🌧️' : '☀️';
+        }
+        if (clock) {
+          clock.innerHTML = `
+            <span class="live-pulse-dot"></span>
+            <span>En vivo: ${timeDisplay}</span>
+          `;
+        }
+
+        renderMunicipalitiesList();
+
+      } catch (err) {
+        console.error('Error al actualizar meteorología:', err);
+        if (clock) {
+          clock.innerHTML = `<span style="color:#f87171;">⚠️ Error de conexión</span>`;
+        }
+        showToast('Error al conectar con el servidor meteorológico de Open-Meteo.');
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('spin-icon');
+        if (planetReloadBtn) planetReloadBtn.classList.remove('spin-icon');
+        if (refreshLabel) refreshLabel.textContent = 'Refrescar';
+      }
+    }
+
+    // --- 7.1 Simulación Realista de Frente de Tormenta (Efecto Radar SIATA) ---
+    function applySimulatedStormFront() {
+      // Simula un evento convectivo típico de la tarde cruzando Valle de Aburrá y Oriente
+      const simCities = {
+        'itagui': { rain: 26.5, temp: 18, prob: 95 },     // Granizo / Tormenta severa (>55 dBZ)
+        'medellin': { rain: 18.4, temp: 19, prob: 90 },   // Tormenta fuerte (48 dBZ)
+        'envigado': { rain: 15.2, temp: 18, prob: 85 },   // Tormenta (46 dBZ)
+        'sabaneta': { rain: 12.0, temp: 19, prob: 80 },   // Lluvia fuerte (44 dBZ)
+        'bello': { rain: 9.8, temp: 21, prob: 75 },       // Lluvia fuerte (42 dBZ)
+        'laestrella': { rain: 14.5, temp: 17, prob: 80 }, // Tormenta (45 dBZ)
+        'caldas': { rain: 7.2, temp: 17, prob: 65 },      // Lluvia moderada (39 dBZ)
+        'copacabana': { rain: 4.8, temp: 22, prob: 55 },  // Lluvia moderada (35 dBZ)
+        'girardota': { rain: 2.2, temp: 23, prob: 45 },   // Lluvia débil (28 dBZ)
+        'barbosa': { rain: 0.6, temp: 24, prob: 30 },     // Llovizna (19 dBZ)
+        'marinilla': { rain: 16.8, temp: 15, prob: 85 },  // Tormenta en Oriente (47 dBZ)
+        'rionegro': { rain: 13.5, temp: 16, prob: 80 },   // Lluvia fuerte (44 dBZ)
+        'guarne': { rain: 8.9, temp: 16, prob: 70 },      // Lluvia fuerte (41 dBZ)
+        'elsantuario': { rain: 11.2, temp: 15, prob: 75 },// Lluvia fuerte (43 dBZ)
+        'elcarmen': { rain: 7.5, temp: 15, prob: 65 },    // Lluvia moderada (39 dBZ)
+        'elretiro': { rain: 6.2, temp: 16, prob: 60 },    // Lluvia moderada (37 dBZ)
+        'laceja': { rain: 5.0, temp: 16, prob: 55 },      // Lluvia moderada (35 dBZ)
+        'sanvicente': { rain: 3.2, temp: 16, prob: 50 }   // Lluvia débil (31 dBZ)
+      };
+
+      let rainingCount = 0;
+      MUNICIPALITIES.forEach(city => {
+        const sim = simCities[city.id] || { rain: 0, temp: 20, prob: 20 };
+        city.rain = sim.rain;
+        city.temp = sim.temp;
+        city.prob = sim.prob;
+        city.dbz = mmhToDbz(sim.rain);
+
+        if (city.rain > 0.1) rainingCount++;
+
+        if (city.marker && city.marker.getPopup() && city.marker.isPopupOpen()) {
+          city.marker.setPopupContent(getCityPopupHtml(city));
+        }
+      });
+
+      // Simular puntos de la malla acordes al frente de tormenta
+      gridLayerGroup.clearLayers();
+      GRID_POINTS.forEach(pt => {
+        // Distancia al núcleo de tormenta del valle (6.18, -75.59) y oriente (6.16, -75.35)
+        const dAburra = Math.hypot(pt.lat - 6.20, pt.lng - (-75.58));
+        const dOriente = Math.hypot(pt.lat - 6.16, pt.lng - (-75.35));
+
+        let rain = 0;
+        if (dAburra < 0.22) {
+          rain = Math.max(0, 24 * (1 - (dAburra / 0.22)));
+        }
+        if (dOriente < 0.18) {
+          rain = Math.max(rain, 18 * (1 - (dOriente / 0.18)));
+        }
+
+        pt.rain = Math.round(rain * 10) / 10;
+        pt.prob = pt.rain > 0 ? 80 : 15;
+        const dbz = mmhToDbz(pt.rain);
+        const cat = getDbzCategory(dbz);
+
+        const bounds = [
+          [pt.lat - 0.05, pt.lng - 0.05],
+          [pt.lat + 0.05, pt.lng + 0.05]
+        ];
+
+        const rect = L.rectangle(bounds, {
+          fillColor: cat.color,
+          fillOpacity: pt.rain > 0.05 ? 0.65 * cloudOpacity : 0.05,
+          color: cat.color,
+          weight: 0.8,
+          opacity: 0.5 * cloudOpacity
+        });
+
+        rect.bindPopup(`
+          <div class="gis-popup">
+            <div class="gis-popup-header">
+              <div class="gis-popup-title">Celda de Malla (Simulada)</div>
+              <div class="gis-popup-coords">${pt.lat.toFixed(2)}° N, ${pt.lng.toFixed(2)}° W</div>
+            </div>
+            <div class="gis-popup-row"><span>Precipitación:</span><strong>${pt.rain.toFixed(1)} mm/h</strong></div>
+            <div class="gis-popup-row"><span>Reflectividad:</span><strong>${dbz} dBZ (${cat.label})</strong></div>
+            <div class="gis-popup-row"><span>Probabilidad:</span><strong>${pt.prob}%</strong></div>
+          </div>
+        `);
+        rect.addTo(gridLayerGroup);
+        pt.rectangle = rect;
+      });
+
+      updateCloudOverlay();
+      updateMarkerIcons();
+
+      const clock = document.getElementById('last-updated-clock');
+      const bannerCount = document.getElementById('summary-rain-count');
+      const bannerTime = document.getElementById('summary-update-time');
+      const bannerIcon = document.getElementById('summary-rain-icon');
+
+      if (bannerCount) bannerCount.textContent = `Tormenta activa en ${rainingCount} de ${MUNICIPALITIES.length} municipios`;
+      if (bannerTime) bannerTime.textContent = `Frente de Lluvia Convectivo SIATA (Demostración)`;
+      if (bannerIcon) bannerIcon.textContent = '⚡';
+      if (clock) clock.textContent = `Simulación SIATA`;
+
+      renderMunicipalitiesList();
+    }
+
+    function toggleSimulationMode() {
+      isSimulated = !isSimulated;
+      const simBtn = document.getElementById('btn-toggle-sim');
+      const simIcon = document.getElementById('sim-icon');
+      const simLabel = document.getElementById('sim-label');
+
+      const mobSimBtn = document.getElementById('mob-toggle-sim');
+      const mobSimIcon = document.getElementById('mob-sim-icon');
+      const mobSimLabel = document.getElementById('mob-sim-label');
+
+      if (isSimulated) {
+        if (simBtn) simBtn.classList.add('active');
+        if (simIcon) simIcon.textContent = '☀️';
+        if (simLabel) simLabel.textContent = 'Tiempo Real';
+
+        if (mobSimBtn) mobSimBtn.classList.add('active');
+        if (mobSimIcon) mobSimIcon.textContent = '☀️';
+        if (mobSimLabel) mobSimLabel.textContent = 'Volver a Tiempo Real';
+
+        applySimulatedStormFront();
+        showToast('Demostración: Frente de lluvia y nubes de reflectividad SIATA activados.');
+      } else {
+        if (simBtn) simBtn.classList.remove('active');
+        if (simIcon) simIcon.textContent = '⚡';
+        if (simLabel) simLabel.textContent = 'Simular Frente';
+
+        if (mobSimBtn) mobSimBtn.classList.remove('active');
+        if (mobSimIcon) mobSimIcon.textContent = '⚡';
+        if (mobSimLabel) mobSimLabel.textContent = 'Simular Frente de Lluvia';
+
+        fetchMeteorologicalData();
+        showToast('Restaurando datos meteorológicos en tiempo real de Open-Meteo.');
+      }
+    }
+
+    // --- 8. Renderizado de Municipios en Barra Lateral ---
+    function renderMunicipalitiesList() {
+      const container = document.getElementById('cities-list-container');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      let list = [...MUNICIPALITIES];
+      if (currentFilter === 'aburra') {
+        list = list.filter(c => c.region === 'aburra');
+      } else if (currentFilter === 'oriente') {
+        list = list.filter(c => c.region === 'oriente');
+      } else if (currentFilter === 'raining') {
+        list = list.filter(c => c.rain >= 0.15);
+      }
+
+      list.sort((a, b) => b.rain - a.rain || a.name.localeCompare(b.name));
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:16px; color:var(--text-dim); font-size:12px; background:rgba(15,23,42,0.4); border-radius:6px; border:1px solid var(--border-subtle);">
+            Sin municipios que coincidan con el filtro
+          </div>
+        `;
+        return;
+      }
+
+      list.forEach(city => {
+        const isRaining = city.rain >= 0.15;
+        const dbz = mmhToDbz(city.rain);
+        const cat = getDbzCategory(dbz);
+
+        let badgeStyle = `background: rgba(148, 163, 184, 0.15); color: var(--text-dim); border: 1px solid var(--border-subtle);`;
+        if (dbz >= 60) {
+          badgeStyle = `background: rgba(244, 114, 182, 0.25); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.6);`;
+        } else if (dbz >= 50) {
+          badgeStyle = `background: rgba(147, 51, 234, 0.25); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.6);`;
+        } else if (dbz >= 42) {
+          badgeStyle = `background: rgba(220, 38, 38, 0.25); color: #f87171; border: 1px solid rgba(220, 38, 38, 0.5);`;
+        } else if (dbz >= 34) {
+          badgeStyle = `background: rgba(234, 88, 12, 0.25); color: #fb923c; border: 1px solid rgba(234, 88, 12, 0.5);`;
+        } else if (dbz >= 24) {
+          badgeStyle = `background: rgba(234, 179, 8, 0.22); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.5);`;
+        } else if (dbz >= 18) {
+          badgeStyle = `background: rgba(16, 185, 129, 0.22); color: #4ade80; border: 1px solid rgba(16, 185, 129, 0.5);`;
+        } else if (isRaining) {
+          badgeStyle = `background: rgba(2, 132, 199, 0.22); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.5);`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'city-card-item';
+        card.id = `city-item-${city.id}`;
+        card.innerHTML = `
+          <div class="city-main-info">
+            <div class="city-title-row">
+              <span class="city-title">${city.name}</span>
+              <span class="city-region-tag">${city.region === 'aburra' ? 'Valle' : 'Oriente'}</span>
+            </div>
+            <div class="city-weather-row">
+              <span>${city.temp}°C</span>
+              <span>· Prob. ${city.prob}%</span>
+              ${city.rain > 0.05 ? `<span style="color:${cat.color}; font-weight:600;">· ${dbz} dBZ</span>` : ''}
+            </div>
+          </div>
+          <div class="rain-badge-pill" style="${badgeStyle}">
+            ${city.rain.toFixed(1)} mm/h
+          </div>
+        `;
+
+        card.onclick = () => {
+          focusCity(city);
+        };
+
+        container.appendChild(card);
+      });
+    }
+
+    function focusCity(city) {
+      map.flyTo([city.lat, city.lng], 13, { duration: 1.2 });
+      if (city.marker) {
+        city.marker.setPopupContent(getCityPopupHtml(city));
+        setTimeout(() => city.marker.openPopup(), 600);
+      }
+
+      document.querySelectorAll('.city-card-item').forEach(c => c.classList.remove('active-focus'));
+      const activeCard = document.getElementById(`city-item-${city.id}`);
+      if (activeCard) activeCard.classList.add('active-focus');
+    }
+
+    // --- 9. Controladores de Interfaz & GPS ---
+    function setupEventListeners() {
+      // Zoom Presets
+      document.getElementById('btn-zoom-all').onclick = () => {
+        map.flyTo([6.18, -75.45], 11, { duration: 1.2 });
+      };
+
+      document.getElementById('btn-zoom-aburra').onclick = () => {
+        map.flyTo([6.25, -75.57], 12, { duration: 1.2 });
+      };
+
+      document.getElementById('btn-zoom-oriente').onclick = () => {
+        map.flyTo([6.14, -75.39], 12, { duration: 1.2 });
+      };
+
+      // Alternar Simulación / Tiempo Real
+      const simToggleBtn = document.getElementById('btn-toggle-sim');
+      if (simToggleBtn) {
+        simToggleBtn.onclick = () => toggleSimulationMode();
+      }
+
+      // GPS con autorización bajo demanda
+      const gpsBtn = document.getElementById('btn-gps');
+      const gpsLabel = document.getElementById('label-gps');
+
+      gpsBtn.onclick = () => {
+        if (!navigator.geolocation) {
+          showToast('Tu navegador o dispositivo no soporta geolocalización.');
+          return;
+        }
+
+        gpsLabel.textContent = 'Localizando...';
+        gpsBtn.style.opacity = '0.7';
+
+        const geoOptions = {
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 0
+        };
+
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            gpsLabel.textContent = 'Mi GPS';
+            gpsBtn.style.opacity = '1';
+
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+
+            map.flyTo([lat, lng], 14, { duration: 1.5 });
+
+            if (userLocationMarker) {
+              map.removeLayer(userLocationMarker);
+            }
+
+            userLocationMarker = L.circleMarker([lat, lng], {
+              radius: 9,
+              fillColor: '#38bdf8',
+              color: '#ffffff',
+              weight: 2.5,
+              fillOpacity: 0.95
+            }).bindPopup('📍 Tu ubicación actual').addTo(map).openPopup();
+
+            showToast('Ubicación localizada con éxito.');
+          },
+          err => {
+            gpsLabel.textContent = 'Mi GPS';
+            gpsBtn.style.opacity = '1';
+            console.warn('Geolocation notice:', err);
+
+            let msg = 'No se pudo obtener la ubicación.';
+            if (err.code === 1) {
+              msg = 'Permiso denegado. Si no viste la solicitud, actívalo en el icono de candado de tu navegador.';
+            } else if (err.code === 2) {
+              msg = 'Posición no disponible en este dispositivo.';
+            } else if (err.code === 3) {
+              msg = 'Tiempo de espera agotado al consultar ubicación. Reintenta.';
+            }
+            showToast(msg);
+          },
+          geoOptions
+        );
+      };
+
+      // Refrescar datos meteorológicos
+      const doRefresh = () => {
+        showToast('Sincronizando con Open-Meteo...');
+        fetchMeteorologicalData();
+      };
+
+      document.getElementById('btn-refresh-data').onclick = doRefresh;
+      const bannerRefresh = document.getElementById('btn-banner-refresh');
+      if (bannerRefresh) bannerRefresh.onclick = doRefresh;
+
+      const btnReloadHeader = document.getElementById('btn-reload-page');
+      if (btnReloadHeader) {
+        btnReloadHeader.onclick = (e) => {
+          e.preventDefault();
+          doRefresh();
+        };
+      }
+
+      // Toggle Sidebar
+      const sidebar = document.getElementById('gis-sidebar');
+      const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar');
+      const btnCloseSidebar = document.getElementById('btn-close-sidebar');
+
+      if (toggleSidebarBtn) {
+        toggleSidebarBtn.onclick = () => {
+          sidebar.classList.toggle('collapsed');
+          toggleSidebarBtn.classList.toggle('active', !sidebar.classList.contains('collapsed'));
+          setTimeout(() => map.invalidateSize(), 300);
+        };
+      }
+
+      if (btnCloseSidebar) {
+        btnCloseSidebar.onclick = () => {
+          sidebar.classList.add('collapsed');
+          if (toggleSidebarBtn) toggleSidebarBtn.classList.remove('active');
+          setTimeout(() => map.invalidateSize(), 300);
+        };
+      }
+
+      // Menú Hamburguesa Móvil
+      const btnHamburger = document.getElementById('btn-hamburger');
+      const mobileDrawer = document.getElementById('mobile-menu-drawer');
+      const iconHam = document.getElementById('icon-hamburger');
+      const iconHamClose = document.getElementById('icon-hamburger-close');
+
+      const closeMobileDrawer = () => {
+        if (!mobileDrawer) return;
+        mobileDrawer.classList.remove('open');
+        if (btnHamburger) btnHamburger.classList.remove('active');
+        if (iconHam) iconHam.style.display = 'block';
+        if (iconHamClose) iconHamClose.style.display = 'none';
+      };
+
+      if (btnHamburger && mobileDrawer) {
+        btnHamburger.onclick = (e) => {
+          e.stopPropagation();
+          const isOpen = mobileDrawer.classList.toggle('open');
+          btnHamburger.classList.toggle('active', isOpen);
+          if (iconHam) iconHam.style.display = isOpen ? 'none' : 'block';
+          if (iconHamClose) iconHamClose.style.display = isOpen ? 'block' : 'none';
+        };
+
+        // Cerrar menú al hacer clic fuera
+        document.addEventListener('click', (e) => {
+          if (!mobileDrawer.contains(e.target) && !btnHamburger.contains(e.target)) {
+            closeMobileDrawer();
+          }
+        });
+      }
+
+      // Botones del Menú Móvil
+      const mobZoomAll = document.getElementById('mob-zoom-all');
+      if (mobZoomAll) {
+        mobZoomAll.onclick = () => {
+          document.getElementById('btn-zoom-all').click();
+          closeMobileDrawer();
+        };
+      }
+
+      const mobZoomAburra = document.getElementById('mob-zoom-aburra');
+      if (mobZoomAburra) {
+        mobZoomAburra.onclick = () => {
+          document.getElementById('btn-zoom-aburra').click();
+          closeMobileDrawer();
+        };
+      }
+
+      const mobZoomOriente = document.getElementById('mob-zoom-oriente');
+      if (mobZoomOriente) {
+        mobZoomOriente.onclick = () => {
+          document.getElementById('btn-zoom-oriente').click();
+          closeMobileDrawer();
+        };
+      }
+
+      const mobToggleSidebar = document.getElementById('mob-toggle-sidebar');
+      if (mobToggleSidebar) {
+        mobToggleSidebar.onclick = () => {
+          sidebar.classList.remove('collapsed');
+          if (toggleSidebarBtn) toggleSidebarBtn.classList.add('active');
+          setTimeout(() => map.invalidateSize(), 300);
+          closeMobileDrawer();
+        };
+      }
+
+      const mobToggleSim = document.getElementById('mob-toggle-sim');
+      if (mobToggleSim) {
+        mobToggleSim.onclick = () => {
+          toggleSimulationMode();
+          closeMobileDrawer();
+        };
+      }
+
+      const mobBtnGps = document.getElementById('mob-btn-gps');
+      if (mobBtnGps) {
+        mobBtnGps.onclick = () => {
+          document.getElementById('btn-gps').click();
+          closeMobileDrawer();
+        };
+      }
+
+      const mobBtnRefresh = document.getElementById('mob-btn-refresh');
+      if (mobBtnRefresh) {
+        mobBtnRefresh.onclick = () => {
+          fetchMeteorologicalData();
+          closeMobileDrawer();
+        };
+      }
+
+      // Menú Desplegable de Capas (Plegable)
+      const layerWrapper = document.getElementById('layer-control-wrapper');
+      const btnToggleLayers = document.getElementById('btn-toggle-layers');
+      const floatingLayerPanel = document.getElementById('floating-layer-panel');
+
+      const toggleLayerPanel = (show) => {
+        if (!floatingLayerPanel || !btnToggleLayers) return;
+        const willOpen = typeof show === 'boolean' ? show : floatingLayerPanel.classList.contains('collapsed');
+        if (willOpen) {
+          floatingLayerPanel.classList.remove('collapsed');
+          btnToggleLayers.classList.add('active');
+        } else {
+          floatingLayerPanel.classList.add('collapsed');
+          btnToggleLayers.classList.remove('active');
+        }
+      };
+
+      if (btnToggleLayers && floatingLayerPanel) {
+        btnToggleLayers.onclick = (e) => {
+          e.stopPropagation();
+          toggleLayerPanel();
+        };
+
+        // Cerrar panel de capas al hacer clic fuera
+        document.addEventListener('click', (e) => {
+          if (layerWrapper && !layerWrapper.contains(e.target)) {
+            toggleLayerPanel(false);
+          }
+        });
+      }
+
+      const mobToggleLayers = document.getElementById('mob-toggle-layers');
+      if (mobToggleLayers) {
+        mobToggleLayers.onclick = () => {
+          toggleLayerPanel(true);
+          closeMobileDrawer();
+        };
+      }
+
+      // Filtros de Región
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.onclick = () => {
+          document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          currentFilter = tab.getAttribute('data-filter');
+          renderMunicipalitiesList();
+        };
+      });
+
+      // Capas: Precipitaciones
+      document.getElementById('layer-toggle-clouds').onchange = (e) => {
+        if (!cloudOverlay) return;
+        if (e.target.checked) {
+          if (!map.hasLayer(cloudOverlay)) cloudOverlay.addTo(map);
+          cloudOverlay.setOpacity(cloudOpacity);
+        } else {
+          map.removeLayer(cloudOverlay);
+        }
+      };
+
+      // Capas: Marcadores Valle de Aburrá
+      document.getElementById('layer-toggle-aburra').onchange = (e) => {
+        if (e.target.checked) {
+          markersAburraGroup.addTo(map);
+        } else {
+          map.removeLayer(markersAburraGroup);
+        }
+      };
+
+      // Capas: Marcadores Oriente
+      document.getElementById('layer-toggle-oriente').onchange = (e) => {
+        if (e.target.checked) {
+          markersOrienteGroup.addTo(map);
+        } else {
+          map.removeLayer(markersOrienteGroup);
+        }
+      };
+
+      // Slider de Opacidad
+      const opSlider = document.getElementById('radar-opacity-slider');
+      const opVal = document.getElementById('opacity-val');
+      opSlider.oninput = (e) => {
+        cloudOpacity = parseInt(e.target.value) / 100;
+        opVal.textContent = `${e.target.value}%`;
+
+        if (cloudOverlay) {
+          cloudOverlay.setOpacity(cloudOpacity);
+        }
+
+        GRID_POINTS.forEach(pt => {
+          if (pt.rectangle) {
+            const dbz = mmhToDbz(pt.rain);
+            const color = getDbzCategory(dbz).color;
+            pt.rectangle.setStyle({
+              fillColor: color,
+              fillOpacity: pt.rain > 0.05 ? 0.65 * cloudOpacity : 0.05,
+              opacity: 0.5 * cloudOpacity
+            });
+          }
+        });
+      };
+
+      // Selector de Mapa Base
+      document.getElementById('select-basemap').onchange = (e) => {
+        const choice = e.target.value;
+        if (activeBaseLayer) map.removeLayer(activeBaseLayer);
+        activeBaseLayer = baseLayers[choice] || baseLayers['esri-dark'];
+        activeBaseLayer.addTo(map);
+      };
+    }
+
+    function showToast(text) {
+      const toast = document.getElementById('gis-toast');
+      const msg = document.getElementById('toast-message');
+      if (!toast || !msg) return;
+
+      msg.textContent = text;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 4000);
+    }
+
+    // --- 11. Arranque ---
+    window.addEventListener('DOMContentLoaded', () => {
+      const sidebar = document.getElementById('gis-sidebar');
+      const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar');
+      
+      // La barra lateral inicia cerrada por defecto para no tapar el mapa
+      sidebar.classList.add('collapsed');
+      if (toggleSidebarBtn) {
+        toggleSidebarBtn.classList.remove('active');
+      }
+
+      initMap();
+
+      // Auto-refresco periódico cada 5 minutos
+      setInterval(() => {
+        fetchMeteorologicalData();
+      }, 5 * 60 * 1000);
+
+      // Auto-sincronizar inmediatamente al volver a la pestaña o reactivar pantalla
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          fetchMeteorologicalData();
+        }
+      });
+    });
+  </script>
+</body>
+</html>

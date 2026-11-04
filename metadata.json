@@ -1,0 +1,8 @@
+{
+  "name": "GeoVisor Antioquia - Radar Meteorológico y Estaciones",
+  "description": "Visualizador meteorológico interactivo de Antioquia con efecto radar de nubes de reflectividad SIATA, anillos de alcance y monitoreo en tiempo real de 18 municipios del Valle de Aburrá y Oriente Antioqueño con Open-Meteo.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
