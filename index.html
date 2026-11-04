@@ -488,7 +488,10 @@
         rgba(100, 116, 139, 0.2) 0%,   /* 0 dBZ (Seco / Sin eco) */
         rgba(100, 116, 139, 0.2) 10%,  /* 8 dBZ (Sin eco) */
         #0284c7 12.5%,                 /* 10 dBZ (Azul - Bajas) */
-        #10b981 25%,                   /* 20 dBZ (Verde - Ligeras) */
+        #06b6d4 18.75%,                /* 15 dBZ (Turquesa) */
+        #10b981 21.25%,                /* 17 dBZ (Tono verdoso - Ligeras) */
+        #22c55e 25%,                   /* 20 dBZ (Verde esmeralda) */
+        #84cc16 31.25%,                /* 25 dBZ (Lima) */
         #eab308 37.5%,                 /* 30 dBZ (Amarillo - Mod) */
         #ea580c 50%,                   /* 40 dBZ (Naranja - Altas) */
         #dc2626 62.5%,                 /* 50 dBZ (Rojo - Muy altas) */
@@ -1143,11 +1146,11 @@
               <span class="legend-sub">Reflectividad dBZ</span>
             </div>
             <div class="legend-categories-row">
-              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#0284c7;"></span>Bajas (10-20)</span>
-              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#10b981;"></span>Lig (20-30)</span>
-              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#eab308;"></span>Mod (30-40)</span>
-              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#dc2626;"></span>Altas (40-55)</span>
-              <span class="legend-cat-badge essential"><span class="legend-cat-dot" style="background:#f472b6;"></span>Granizo (&gt;55)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#0284c7;"></span>Bajas (10-16)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#10b981;"></span>Lig (16-26)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#eab308;"></span>Mod (26-38)</span>
+              <span class="legend-cat-badge"><span class="legend-cat-dot" style="background:#dc2626;"></span>Altas (38-52)</span>
+              <span class="legend-cat-badge essential"><span class="legend-cat-dot" style="background:#f472b6;"></span>Granizo (&gt;52)</span>
             </div>
           </div>
           <div class="siata-gradient-bar-h"></div>
@@ -1296,14 +1299,67 @@
       return Math.min(80, Math.round(dbz));
     }
 
+    // Escala continua oficial de Reflectividad Radar SIATA (Antioquia)
+    const RADAR_COLOR_STOPS = [
+      { dbz: 0,  r: 100, g: 116, b: 139, a: 0 },    // Seco / Ruido
+      { dbz: 8,  r: 100, g: 116, b: 139, a: 0 },    // Umbral de virga
+      { dbz: 10, r: 2,   g: 132, b: 199, a: 0.8 },  // 10 dBZ: Azul (#0284c7)
+      { dbz: 13, r: 6,   g: 160, b: 215, a: 0.84 }, // 13 dBZ: Azul celeste
+      { dbz: 15, r: 6,   g: 182, b: 212, a: 0.87 }, // 15 dBZ: Cyan / Turquesa (#06b6d4)
+      { dbz: 16.5, r: 16, g: 185, b: 129, a: 0.92 }, // 16.5-17 dBZ: Tono verdoso (#10b981)
+      { dbz: 20, r: 34,  g: 197, b: 94,  a: 0.92 }, // 20 dBZ: Verde esmeralda (#22c55e)
+      { dbz: 25, r: 132, g: 204, b: 22,  a: 0.9 },  // 25 dBZ: Lima / Verde amarillento (#84cc16)
+      { dbz: 30, r: 234, g: 179, b: 8,   a: 0.92 }, // 30 dBZ: Amarillo (#eab308)
+      { dbz: 36, r: 249, g: 115, b: 22,  a: 0.92 }, // 36 dBZ: Ámbar (#f97316)
+      { dbz: 42, r: 234, g: 88,  b: 12,  a: 0.94 }, // 42 dBZ: Naranja (#ea580c)
+      { dbz: 48, r: 220, g: 38,  b: 38,  a: 0.95 }, // 48 dBZ: Rojo (#dc2626)
+      { dbz: 54, r: 185, g: 28,  b: 28,  a: 0.96 }, // 54 dBZ: Rojo oscuro (#b91c1c)
+      { dbz: 60, r: 147, g: 51,  b: 234, a: 0.96 }, // 60 dBZ: Morado / Tormenta (#9333ea)
+      { dbz: 68, r: 217, g: 70,  b: 239, a: 0.98 }, // 68 dBZ: Magenta (#d946ef)
+      { dbz: 80, r: 244, g: 114, b: 182, a: 1.0 }   // 80 dBZ: Rosa / Granizo (#f472b6)
+    ];
+
+    function getInterpolatedRadarRgb(dbz) {
+      if (dbz <= RADAR_COLOR_STOPS[0].dbz) {
+        return { r: RADAR_COLOR_STOPS[0].r, g: RADAR_COLOR_STOPS[0].g, b: RADAR_COLOR_STOPS[0].b };
+      }
+      const last = RADAR_COLOR_STOPS[RADAR_COLOR_STOPS.length - 1];
+      if (dbz >= last.dbz) {
+        return { r: last.r, g: last.g, b: last.b };
+      }
+      for (let i = 0; i < RADAR_COLOR_STOPS.length - 1; i++) {
+        const s0 = RADAR_COLOR_STOPS[i];
+        const s1 = RADAR_COLOR_STOPS[i + 1];
+        if (dbz >= s0.dbz && dbz <= s1.dbz) {
+          const t = (dbz - s0.dbz) / (s1.dbz - s0.dbz);
+          return {
+            r: Math.round(s0.r + t * (s1.r - s0.r)),
+            g: Math.round(s0.g + t * (s1.g - s0.g)),
+            b: Math.round(s0.b + t * (s1.b - s0.b))
+          };
+        }
+      }
+      return { r: last.r, g: last.g, b: last.b };
+    }
+
+    function getDbzHexColor(dbz) {
+      const rgb = getInterpolatedRadarRgb(dbz);
+      const toHex = (c) => c.toString(16).padStart(2, '0');
+      return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
+    }
+
+    function getDbzRgba(dbz, alpha = 0.9) {
+      const rgb = getInterpolatedRadarRgb(dbz);
+      return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+    }
+
     function getDbzCategory(dbz) {
-      if (dbz >= 60) return { label: 'Granizo probable', color: '#f472b6', tier: 'hail' };
-      if (dbz >= 50) return { label: 'Tormenta severa', color: '#9333ea', tier: 'hail' };
-      if (dbz >= 42) return { label: 'Intensidades muy altas', color: '#dc2626', tier: 'heavy' };
-      if (dbz >= 34) return { label: 'Intensidades altas', color: '#ea580c', tier: 'heavy' };
-      if (dbz >= 24) return { label: 'Intensidades moderadas', color: '#eab308', tier: 'moderate' };
-      if (dbz >= 18) return { label: 'Intensidades ligeras', color: '#10b981', tier: 'light' };
-      if (dbz >= 10) return { label: 'Intensidades bajas', color: '#0284c7', tier: 'light' };
+      const color = getDbzHexColor(dbz);
+      if (dbz >= 52) return { label: 'Granizo probable', color, tier: 'hail' };
+      if (dbz >= 38) return { label: 'Intensidades altas', color, tier: 'heavy' };
+      if (dbz >= 26) return { label: 'Intensidades moderadas', color, tier: 'moderate' };
+      if (dbz >= 16) return { label: 'Intensidades ligeras', color, tier: 'light' };
+      if (dbz >= 10) return { label: 'Intensidades bajas', color, tier: 'low' };
       return { label: 'Seco / Sin nubes activas', color: '#64748b', tier: 'dry' };
     }
 
@@ -1446,57 +1502,41 @@
     // Función para generar el gradiente radial auténtico según la categoría dBZ del radar
     function createRadarRadialGradient(ctx, x, y, r, dbz) {
       const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      if (dbz >= 60) {
-        // Granizo / Tormenta Severa (> 60 dBZ): Rosa/Blanco -> Magenta -> Morado -> Rojo -> Naranja -> Amarillo -> Verde -> Azul -> Transparente
-        grad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-        grad.addColorStop(0.14, 'rgba(244, 114, 182, 0.95)'); // Rosa (#f472b6)
-        grad.addColorStop(0.28, 'rgba(217, 70, 239, 0.9)');   // Magenta (#d946ef)
-        grad.addColorStop(0.44, 'rgba(147, 51, 234, 0.85)');  // Morado (#9333ea)
-        grad.addColorStop(0.58, 'rgba(220, 38, 38, 0.82)');  // Rojo (#dc2626)
-        grad.addColorStop(0.72, 'rgba(234, 88, 12, 0.75)');  // Naranja (#ea580c)
-        grad.addColorStop(0.82, 'rgba(234, 179, 8, 0.65)');  // Amarillo (#eab308)
-        grad.addColorStop(0.9, 'rgba(16, 185, 129, 0.5)');   // Verde (#10b981)
-        grad.addColorStop(0.96, 'rgba(2, 132, 199, 0.35)');  // Azul (#0284c7)
+      // Núcleo central exacto correspondiente al valor dBZ continuo
+      grad.addColorStop(0, getDbzRgba(dbz, 0.94));
+
+      if (dbz >= 52) {
+        // Tormenta Severa / Granizo (> 52 dBZ)
+        grad.addColorStop(0.18, getDbzRgba(dbz * 0.9, 0.9));
+        grad.addColorStop(0.38, getDbzRgba(44, 0.85));
+        grad.addColorStop(0.58, getDbzRgba(30, 0.75));
+        grad.addColorStop(0.75, getDbzRgba(18, 0.6));
+        grad.addColorStop(0.9, getDbzRgba(11, 0.35));
         grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      } else if (dbz >= 50) {
-        // Tormenta Severa (50-60 dBZ): Morado -> Rojo -> Naranja -> Amarillo -> Verde -> Azul -> Transparente
-        grad.addColorStop(0, 'rgba(147, 51, 234, 0.95)');   // Morado (#9333ea)
-        grad.addColorStop(0.26, 'rgba(220, 38, 38, 0.88)'); // Rojo (#dc2626)
-        grad.addColorStop(0.48, 'rgba(234, 88, 12, 0.8)');  // Naranja (#ea580c)
-        grad.addColorStop(0.68, 'rgba(234, 179, 8, 0.7)');  // Amarillo (#eab308)
-        grad.addColorStop(0.84, 'rgba(16, 185, 129, 0.55)');// Verde (#10b981)
-        grad.addColorStop(0.95, 'rgba(2, 132, 199, 0.35)'); // Azul (#0284c7)
+      } else if (dbz >= 38) {
+        // Altas / Muy Altas (38-52 dBZ)
+        grad.addColorStop(0.25, getDbzRgba(dbz * 0.88, 0.88));
+        grad.addColorStop(0.52, getDbzRgba(26, 0.75));
+        grad.addColorStop(0.74, getDbzRgba(17, 0.6));
+        grad.addColorStop(0.9, getDbzRgba(11, 0.3));
         grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      } else if (dbz >= 42) {
-        // Intensidades Muy Altas (42-50 dBZ): Rojo -> Naranja -> Amarillo -> Verde -> Azul -> Transparente
-        grad.addColorStop(0, 'rgba(220, 38, 38, 0.95)');    // Rojo (#dc2626)
-        grad.addColorStop(0.3, 'rgba(234, 88, 12, 0.85)');  // Naranja (#ea580c)
-        grad.addColorStop(0.58, 'rgba(234, 179, 8, 0.72)'); // Amarillo (#eab308)
-        grad.addColorStop(0.8, 'rgba(16, 185, 129, 0.55)'); // Verde (#10b981)
-        grad.addColorStop(0.94, 'rgba(2, 132, 199, 0.35)'); // Azul (#0284c7)
+      } else if (dbz >= 26) {
+        // Moderadas (26-38 dBZ): Amarillo a Verde
+        grad.addColorStop(0.3, getDbzRgba(dbz * 0.85, 0.85));
+        grad.addColorStop(0.6, getDbzRgba(17, 0.65));
+        grad.addColorStop(0.85, getDbzRgba(11, 0.35));
         grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      } else if (dbz >= 34) {
-        // Intensidades Altas (34-42 dBZ): Naranja -> Amarillo -> Verde -> Azul -> Transparente
-        grad.addColorStop(0, 'rgba(234, 88, 12, 0.92)');    // Naranja (#ea580c)
-        grad.addColorStop(0.38, 'rgba(234, 179, 8, 0.8)');  // Amarillo (#eab308)
-        grad.addColorStop(0.7, 'rgba(16, 185, 129, 0.6)');  // Verde (#10b981)
-        grad.addColorStop(0.9, 'rgba(2, 132, 199, 0.35)');  // Azul (#0284c7)
-        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      } else if (dbz >= 24) {
-        // Intensidades Moderadas (24-34 dBZ): Amarillo -> Verde -> Azul -> Transparente
-        grad.addColorStop(0, 'rgba(234, 179, 8, 0.9)');     // Amarillo (#eab308)
-        grad.addColorStop(0.45, 'rgba(16, 185, 129, 0.72)');// Verde (#10b981)
-        grad.addColorStop(0.82, 'rgba(2, 132, 199, 0.45)'); // Azul (#0284c7)
-        grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      } else if (dbz >= 18) {
-        // Intensidades Ligeras (18-24 dBZ): Verde -> Azul -> Transparente
-        grad.addColorStop(0, 'rgba(16, 185, 129, 0.88)');   // Verde (#10b981)
-        grad.addColorStop(0.55, 'rgba(2, 132, 199, 0.55)'); // Azul (#0284c7)
+      } else if (dbz >= 16) {
+        // Ligeras (16-25 dBZ): Tono verdoso prominente en el núcleo (#10b981 / #22c55e)
+        // A 17 dBZ, muestra claramente el tono verdoso en contraste con los ecos azules de 10-12 dBZ
+        grad.addColorStop(0.38, getDbzRgba(dbz, 0.88));
+        grad.addColorStop(0.68, getDbzRgba(13, 0.55)); // Transición a cyan/celeste
+        grad.addColorStop(0.9, getDbzRgba(10, 0.25));  // Borde exterior azul tenue
         grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
       } else {
-        // Intensidades Bajas (10-18 dBZ): Azul -> Transparente
-        grad.addColorStop(0, 'rgba(2, 132, 199, 0.85)');    // Azul (#0284c7)
-        grad.addColorStop(0.65, 'rgba(14, 165, 233, 0.45)');// Sky (#0ea5e9)
+        // Bajas (10-15 dBZ): Azul puro a transparente
+        grad.addColorStop(0.45, getDbzRgba(dbz, 0.82));
+        grad.addColorStop(0.78, getDbzRgba(10, 0.4));
         grad.addColorStop(1, 'rgba(2, 132, 199, 0)');
       }
       return grad;
@@ -1582,19 +1622,20 @@
 
         // Radio base de la nube según tasa de lluvia e intensidad dBZ
         let baseRadius = 38;
-        if (dbz >= 20) baseRadius = 48;
-        if (dbz >= 30) baseRadius = 60;
+        if (dbz >= 16) baseRadius = 44;
+        if (dbz >= 20) baseRadius = 50;
+        if (dbz >= 30) baseRadius = 62;
         if (dbz >= 40) baseRadius = 75;
         if (dbz >= 50) baseRadius = 90;
 
-        // Ecos satélite secundarios para darle forma orgánica y no circular rígida
-        const blobs = [
-          { x: center.x, y: center.y, r: baseRadius, dbz: dbz },
-          { x: center.x + Math.sin(pIdx * 1.7) * (baseRadius * 0.35), y: center.y + Math.cos(pIdx * 1.7) * (baseRadius * 0.3), r: baseRadius * 0.72, dbz: Math.max(10, dbz - 4) },
-          { x: center.x - Math.cos(pIdx * 2.3) * (baseRadius * 0.3), y: center.y - Math.sin(pIdx * 2.3) * (baseRadius * 0.35), r: baseRadius * 0.6, dbz: Math.max(10, dbz - 7) }
-        ];
+        // Ecos satélite secundarios para morfología orgánica
+        // Dibujamos primero los satélites periféricos y finalmente el núcleo principal (core)
+        // para asegurar que el núcleo de mayor reflectividad (ej. verdoso a 17 dBZ) domine y no sea opacado
+        const sat2 = { x: center.x - Math.cos(pIdx * 2.3) * (baseRadius * 0.3), y: center.y - Math.sin(pIdx * 2.3) * (baseRadius * 0.35), r: baseRadius * 0.6, dbz: Math.max(10, dbz - 6) };
+        const sat1 = { x: center.x + Math.sin(pIdx * 1.7) * (baseRadius * 0.35), y: center.y + Math.cos(pIdx * 1.7) * (baseRadius * 0.3), r: baseRadius * 0.72, dbz: Math.max(10, dbz - 3) };
+        const core = { x: center.x, y: center.y, r: baseRadius, dbz: dbz };
 
-        blobs.forEach(b => {
+        [sat2, sat1, core].forEach(b => {
           ctx.fillStyle = createRadarRadialGradient(ctx, b.x, b.y, b.r, b.dbz);
           ctx.beginPath();
           ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
@@ -2010,18 +2051,16 @@
         const cat = getDbzCategory(dbz);
 
         let badgeStyle = `background: rgba(148, 163, 184, 0.15); color: var(--text-dim); border: 1px solid var(--border-subtle);`;
-        if (dbz >= 60) {
+        if (dbz >= 52) {
           badgeStyle = `background: rgba(244, 114, 182, 0.25); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.6);`;
-        } else if (dbz >= 50) {
+        } else if (dbz >= 48) {
           badgeStyle = `background: rgba(147, 51, 234, 0.25); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.6);`;
-        } else if (dbz >= 42) {
+        } else if (dbz >= 38) {
           badgeStyle = `background: rgba(220, 38, 38, 0.25); color: #f87171; border: 1px solid rgba(220, 38, 38, 0.5);`;
-        } else if (dbz >= 34) {
-          badgeStyle = `background: rgba(234, 88, 12, 0.25); color: #fb923c; border: 1px solid rgba(234, 88, 12, 0.5);`;
-        } else if (dbz >= 24) {
+        } else if (dbz >= 26) {
           badgeStyle = `background: rgba(234, 179, 8, 0.22); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.5);`;
-        } else if (dbz >= 18) {
-          badgeStyle = `background: rgba(16, 185, 129, 0.22); color: #4ade80; border: 1px solid rgba(16, 185, 129, 0.5);`;
+        } else if (dbz >= 16) {
+          badgeStyle = `background: rgba(16, 185, 129, 0.22); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.6);`;
         } else if (isRaining) {
           badgeStyle = `background: rgba(2, 132, 199, 0.22); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.5);`;
         }
