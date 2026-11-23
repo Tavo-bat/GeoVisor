@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface HourlyForecastSlot {
+  hour: string;
+  rain: number;
+  prob: number;
+}
+
 export interface Municipality {
   id: string;
   name: string;
@@ -16,6 +22,7 @@ export interface Municipality {
   humidity?: number | string;
   dbz?: number;
   reportTime?: string;
+  forecast?: HourlyForecastSlot[];
   marker?: any;
 }
 
@@ -25,7 +32,6 @@ export interface GridPoint {
   rain: number;
   prob: number;
   weatherCode: number;
-  rectangle: any;
 }
 
 // Coordenadas oficiales de la antena del Radar Meteorológico del SIATA (Cerro Santa Elena)
@@ -71,8 +77,7 @@ for (let lat = 5.95; lat <= 6.4501; lat += 0.1) {
       lng: Math.round(lng * 100) / 100,
       rain: 0,
       prob: 0,
-      weatherCode: 0,
-      rectangle: null
+      weatherCode: 0
     });
   }
 }

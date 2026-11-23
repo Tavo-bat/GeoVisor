@@ -324,6 +324,7 @@ aside.gis-sidebar.collapsed {
   flex-direction: column;
   gap: 6px;
   max-height: calc(100vh - 280px);
+  max-height: calc(100dvh - 280px);
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -765,6 +766,57 @@ input:checked + .switch-slider:before {
   font-family: var(--font-mono);
 }
 
+.popup-forecast {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.popup-forecast-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+
+.popup-forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.popup-forecast-slot {
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 4px 5px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.popup-forecast-hour {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.popup-forecast-rain {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.popup-forecast-prob {
+  font-size: 9px;
+  color: var(--accent-sky);
+  font-family: var(--font-mono);
+}
+
 /* Notification Toast */
 .gis-toast {
   position: absolute;
@@ -943,8 +995,9 @@ input:checked + .switch-slider:before {
   .mobile-menu-drawer {
     top: 48px;
   }
-  .brand-sub {
-    display: none;
+  .cities-list-wrap {
+    max-height: calc(100vh - 265px);
+    max-height: calc(100dvh - 265px);
   }
   /* Barra de herramientas superior izquierda compacta en horizontal para no tapar el mapa */
   .quick-tools-box {

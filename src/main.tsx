@@ -37,6 +37,7 @@ let currentFilter = 'all';
 let searchQuery = '';
 let isSimulated = false;
 let isFetching = false;
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const PRIORITY_CITIES = new Set(['medellin', 'bello', 'envigado', 'caldas', 'rionegro', 'laceja', 'guarne', 'barbosa']);
 const DENSE_CITIES = new Set(['itagui', 'laestrella', 'sabaneta', 'marinilla', 'copacabana']);
@@ -160,6 +161,30 @@ function getCityPopupHtml(city: Municipality): string {
   const humVal = city.humidity !== undefined && city.humidity !== null && city.humidity !== '--' ? `${city.humidity}%` : '--';
   const reportStr = city.reportTime ? `${city.reportTime} COT` : 'Tiempo real';
 
+  const forecastHtml =
+    city.forecast && city.forecast.length > 0
+      ? `
+        <div class="popup-forecast">
+          <div class="popup-forecast-title">Próximas 3 horas</div>
+          <div class="popup-forecast-grid">
+            ${city.forecast
+              .map(slot => {
+                const slotDbz = mmhToDbz(slot.rain);
+                const slotColor = slot.rain >= 0.15 ? getDbzCategory(slotDbz).color : '#94a3b8';
+                return `
+                  <div class="popup-forecast-slot">
+                    <span class="popup-forecast-hour">${slot.hour}</span>
+                    <span class="popup-forecast-rain" style="color:${slotColor};">${slot.rain.toFixed(1)} mm</span>
+                    <span class="popup-forecast-prob">${slot.prob}%</span>
+                  </div>
+                `;
+              })
+              .join('')}
+          </div>
+        </div>
+      `
+      : '';
+
   return `
     <div class="gis-popup">
       <div class="gis-popup-header">
@@ -170,6 +195,7 @@ function getCityPopupHtml(city: Municipality): string {
       <div class="gis-popup-row"><span>Reflectividad radar:</span><strong style="color:${cat.color};">${dbz} dBZ (${cat.label})</strong></div>
       <div class="gis-popup-row"><span>Probabilidad (esta hora):</span><strong>${probVal}%</strong></div>
       <div class="gis-popup-row"><span>Temperatura / Humedad:</span><strong>${tempVal} °C · ${humVal}</strong></div>
+      ${forecastHtml}
       <div class="gis-popup-row" style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--border-subtle); font-size: 10px; color: var(--text-dim); display: flex; justify-content: space-between;">
         <span>Sincronización:</span>
         <span style="color: var(--accent-emerald); font-weight: 600;"><span class="live-pulse-dot" style="width:6px; height:6px; margin-right:3px;"></span>${reportStr}</span>
@@ -376,6 +402,32 @@ async function fetchMeteorologicalData() {
       city.dbz = dbz;
       city.reportTime = curr.time ? curr.time.split('T')[1] : reportHourStr;
 
+      // Extraer pronóstico para las próximas 3 horas desde la misma respuesta hourly
+      const forecast: { hour: string; rain: number; prob: number }[] = [];
+      if (cityData.hourly && Array.isArray(cityData.hourly.time)) {
+        for (let offset = 1; offset <= 3; offset++) {
+          const fIdx = hourIdx + offset;
+          if (fIdx < cityData.hourly.time.length) {
+            const isoTime: string = cityData.hourly.time[fIdx];
+            const fRain =
+              cityData.hourly.precipitation && typeof cityData.hourly.precipitation[fIdx] === 'number'
+                ? cityData.hourly.precipitation[fIdx]
+                : 0;
+            const fProb =
+              cityData.hourly.precipitation_probability &&
+              typeof cityData.hourly.precipitation_probability[fIdx] === 'number'
+                ? cityData.hourly.precipitation_probability[fIdx]
+                : 0;
+            forecast.push({
+              hour: isoTime.split('T')[1] || `+${offset}h`,
+              rain: fRain,
+              prob: fProb
+            });
+          }
+        }
+      }
+      city.forecast = forecast;
+
       if (rain >= 0.15) rainingCount++;
 
       if (city.marker && city.marker.getPopup() && city.marker.isPopupOpen()) {
@@ -443,6 +495,12 @@ function applySimulatedStormFront() {
     city.prob = sim.prob;
     city.humidity = sim.humidity;
     city.dbz = mmhToDbz(sim.rain);
+    city.reportTime = 'Simulado';
+    city.forecast = [
+      { hour: '+1h', rain: Math.round(sim.rain * 0.75 * 10) / 10, prob: Math.max(15, sim.prob - 10) },
+      { hour: '+2h', rain: Math.round(sim.rain * 0.4 * 10) / 10, prob: Math.max(10, sim.prob - 25) },
+      { hour: '+3h', rain: Math.round(sim.rain * 0.15 * 10) / 10, prob: Math.max(5, sim.prob - 40) }
+    ];
 
     if (city.rain >= 0.15) rainingCount++;
 
@@ -617,6 +675,17 @@ function renderMunicipalitiesList() {
 }
 
 function focusCity(city: Municipality) {
+  // En pantallas móviles, cerrar automáticamente el panel lateral para ver el mapa y el popup
+  if (window.innerWidth <= 900) {
+    const sidebar = document.getElementById('gis-sidebar');
+    const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar');
+    if (sidebar && !sidebar.classList.contains('collapsed')) {
+      sidebar.classList.add('collapsed');
+      if (toggleSidebarBtn) toggleSidebarBtn.classList.remove('active');
+      setTimeout(() => map.invalidateSize(), 260);
+    }
+  }
+
   map.flyTo([city.lat, city.lng], 13, { duration: 1.2 });
   if (city.marker) {
     city.marker.setPopupContent(getCityPopupHtml(city));
@@ -730,6 +799,11 @@ function setupEventListeners() {
 
   // Refrescar datos meteorológicos
   const doRefresh = () => {
+    if (isSimulated) {
+      showToast('Modo simulación activo. Pulsa "Tiempo Real" para sincronizar con Open-Meteo.');
+      applySimulatedStormFront();
+      return;
+    }
     showToast('Sincronizando con Open-Meteo...');
     fetchMeteorologicalData();
   };
@@ -976,9 +1050,16 @@ function showToast(text: string) {
   const msg = document.getElementById('toast-message');
   if (!toast || !msg) return;
 
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+
   msg.textContent = text;
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 4000);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    toastTimer = null;
+  }, 4000);
 }
 
 // --- Arranque ---
